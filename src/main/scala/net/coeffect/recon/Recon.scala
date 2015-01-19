@@ -130,6 +130,8 @@ trait Recon { Recon =>
   }
 
   abstract class ReconFieldFactory {
+    def unapply(field: Field): Maybe[(String, Value)] = Bind((field.name, field.value))
+
     override def toString: String = (String.Builder~Recon.toString~'.'~"Field").state
   }
 
@@ -172,6 +174,8 @@ trait Recon { Recon =>
     def apply(name: String, value: Value): Attr
     def apply(name: String): Attr = apply(name, Extant)
 
+    def unapply(attr: Attr): Maybe[(String, Value)] = Bind((attr.name, attr.value))
+
     override def toString: String = (String.Builder~Recon.toString~'.'~"Attr").state
   }
 
@@ -210,6 +214,8 @@ trait Recon { Recon =>
     def apply(name: String, value: Value): Slot
     def apply(name: String): Slot = apply(name, Extant)
 
+    def unapply(slot: Slot): Maybe[(String, Value)] = Bind((slot.name, slot.value))
+
     override def toString: String = (String.Builder~Recon.toString~'.'~"Slot").state
   }
 
@@ -227,7 +233,7 @@ trait Recon { Recon =>
   abstract class ReconValueFactory {
     def undefined: Value = Absent
 
-    def parse(recon: String): Value = {
+    def parseRecon(recon: String): Value = {
       val result = Parser.BlockParser.run(new UString(recon).iterator)
       if (result.isDone) result.bind
       else result.trap match {
@@ -491,6 +497,8 @@ trait Recon { Recon =>
   }
 
   abstract class ReconTextFactory extends StringFactory[Text] {
+    def unapply(text: Text): Maybe[String] = Bind(text.toUString.toString)
+
     override def toString: String = (String.Builder~Recon.toString~'.'~"Text").state
   }
 
@@ -678,6 +686,8 @@ trait Recon { Recon =>
 
   abstract class ReconBoolFactory {
     def apply(value: Boolean): Bool = if (value) True else False
+
+    def unapply(bool: Bool): Maybe[Boolean] = Bind(bool.toBoolean)
 
     override def toString: String = (String.Builder~Recon.toString~'.'~"Bool").state
   }

@@ -742,7 +742,7 @@ private[recon] trait ReconParser extends ReconFactory { Parser =>
               input.step()
               return Iteratee.done(builder.state)
             }
-            else return error(input, expected = "'}', ',', or newline", found = c)
+            else return error(input, expected = "'}', ';', ',', or newline", found = c)
           }
           else if (input.isDone) return unexpectedEOF
         }

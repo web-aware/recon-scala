@@ -117,11 +117,11 @@ When an attribute precedes a value, the value gets appended to the record
 holding the attribute fields, like so:
 
 ```recon
-@a(href:"example.com")[Warning: Visiting this site may harm your computer!]
+@a(href:"example.com")[Some examples...]
 
 {
   a: { href: "example.com" }
-  "Warning: Visiting this site may harm your computer!"
+  "Some examples..."
 }
 ```
 
@@ -144,6 +144,24 @@ Attributed records are concatenated to preceding attributes
 }
 ```
 
+## Data Model
+
+To a first approximation, the RECON data model has the following structure:
+
+```scala
+abstract class Item                                       // |-- Item
+abstract class Field extends Item                         // |   |-- Field
+case class Attr(name: String, value: Value) extends Field // |   |   |-- Attr
+case class Slot(name: String, value: Value) extends Field // |   |   |-- Slot
+abstract class Value extends Item                         // |   |-- Value
+case class Record(items: Item*) extends Value             // |   |   |-- Record
+case class Text(toString: String) extends Value           // |   |   |-- Text
+case class Number(toDouble: Double) extends Value         // |   |   |-- Number
+case class Bool(toBoolean: Boolean) extends Value         // |   |   |-- Bool
+case object Extant extends Value                          // |   |   |-- Extant
+case object Absent extends Value                          // |   |   |-- Absent
+```
+
 ## Scala Library
 
 To get started with the RECON Scala library, add the `recon-scala` dependency
@@ -153,7 +171,7 @@ to your SBT build.
 libraryDependencies += "net.coeffect" %% "recon-scala" % "0.0.0-SNAPSHOT"
 ```
 
-The Scala library has a compile-time RECON string interpolator.
+The library support compile-time RECON string interpolation.
 
 ```scala
 scala> import net.coeffect.recon.Recon._
@@ -164,6 +182,11 @@ label: String = Example
 
 scala> recon"""@a(href:"example.com")[$label]"""
 res0: net.coeffect.recon.Recon.Value = Record(Attr("a", Record(Slot("href", Text("example.com")))), Text("Example"))
+
+scala> recon"""{1, 2 3, 4}"""
+<console>:11: error: expected '}', ';', ',', or newline, but found '3'
+       recon"""{1, 2 3, 4}"""
+                     ^
 ```
 
 Of course, you can parse and serialize RECON at runtime too.
@@ -172,11 +195,49 @@ Of course, you can parse and serialize RECON at runtime too.
 scala> import net.coeffect.recon.Recon._
 import net.coeffect.recon.Recon._
 
-scala> val event = Value.parse(""" @event("onClick") """)
+scala> val event = Value.parseRecon("""@event("onClick")""")
 event: net.coeffect.recon.Recon.Value = Record(Attr("event", Text("onClick")))
 
 scala> event.toRecon
 res0: String = @event("onClick")
+```
+
+Use the `/` operator to select named fields:
+
+```scala
+scala> import net.coeffect.recon.Recon._
+import net.coeffect.recon.Recon._
+
+scala> val msg = recon"""{from:"me",to:"you"}"""
+msg: net.coeffect.recon.Recon.Value = Record(Slot("from", Text("me")), Slot("to", Text("you")))
+
+scala> msg / "from"
+res0: net.coeffect.recon.Recon.Value = Text("me")
+
+scala> msg / "to"
+res1: net.coeffect.recon.Recon.Value = Text("you")
+
+scala> msg / "body"
+res2: net.coeffect.recon.Recon.Value = Absent
+```
+
+Higher order collection operations and transformations just work.  The
+lightweight basis collections library provides collection utilities as
+unintrusive implicit extension methods, and implements them using fast,
+inlined macros.
+
+```scala
+scala> import net.coeffect.recon.Recon._
+import net.coeffect.recon.Recon._
+
+scala> val list = recon"@ol{@li[a],@li[b],@li[c]}"
+list: net.coeffect.recon.Recon.Value = Record(Attr("ol"), Record(Attr("li"), Text("a")), Record(Attr("li"), Text("b")), Record(Attr("li"), Text("c")))
+
+scala> list.asRecord.map {
+     |   case Attr("ol", _) => Attr("ul")
+     |   case item => item
+     | }
+res0: net.coeffect.recon.Recon.Record = Record(Attr("ul"), Record(Attr("li"), Text("a")), Record(Attr("li"), Text("b")), Record(Attr("li"), Text("c")))
 ```
 
 ## Language Grammar
@@ -199,9 +260,9 @@ NameStartChar ::=
 
 NameChar ::=  NameStartChar | "-" | [0-9] | #xB7 | [#x0300-#x036F] | [#x203F-#x2040]
 
-MarkupChar = Char - ('\\' | '@' | '{' | '}' | '[' | ']')
+MarkupChar ::= Char - ('\\' | '@' | '{' | '}' | '[' | ']')
 
-StringChar = Char - ('"' | '\\' | '@' | '{' | '}' | '[' | ']' | '\b' | '\f' | '\n' | '\r' | '\t')
+StringChar ::= Char - ('"' | '\\' | '@' | '{' | '}' | '[' | ']' | '\b' | '\f' | '\n' | '\r' | '\t')
 
 CharEscape ::= '\\' ('"' | '\\' | '/' | '@' | '{' | '}' | '[' | ']' | 'b' | 'f' | 'n' | 'r' | 't')
 
