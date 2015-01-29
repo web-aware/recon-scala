@@ -58,10 +58,10 @@ trait Recon { Recon =>
   implicit def ExtantTag: ClassTag[Extant]
   implicit def AbsentTag: ClassTag[Absent]
 
-  lazy val Parser: ReconParser = new ReconParser()
-
   implicit def ReconStringContext(stringContext: StringContext): ReconStringContext[this.type] =
-    macro ReconMacros.ReconStringContext[this.type]
+    macro ReconMacros.prefixReconStringContext[this.type]
+
+  lazy val ReconParser: ReconParser = new ReconParser()
 
 
   trait ReconItem { this: Item =>
@@ -180,7 +180,7 @@ trait Recon { Recon =>
   }
 
 
-  protected trait ReconSlot extends Equals with ReconField { this: Slot =>
+  trait ReconSlot extends Equals with ReconField { this: Slot =>
     override def isSlot: Boolean = true
     override def asSlot: Slot = this
 
@@ -234,7 +234,7 @@ trait Recon { Recon =>
     def undefined: Value = Absent
 
     def parseRecon(recon: String): Value = {
-      val result = Parser.BlockParser.run(new UString(recon).iterator)
+      val result = ReconParser.BlockParser.run(new UString(recon).iterator)
       if (result.isDone) result.bind
       else result.trap match {
         case ex: Throwable => throw ex
@@ -561,7 +561,7 @@ trait Recon { Recon =>
     override def toString: String = (String.Builder~"Number"~'('~toDecimalString~')').state
   }
 
-  protected trait ReconInt extends ReconNumber { this: Number =>
+  protected[recon] trait ReconInt extends ReconNumber { this: Number =>
     override def isNaN: Boolean = false
     override def isInfinite: Boolean = false
 
@@ -580,7 +580,7 @@ trait Recon { Recon =>
     override def toDecimalString: String = java.lang.Integer.toString(toInt)
   }
 
-  protected trait ReconLong extends ReconNumber { this: Number =>
+  protected[recon] trait ReconLong extends ReconNumber { this: Number =>
     override def isNaN: Boolean = false
     override def isInfinite: Boolean = false
 
@@ -599,7 +599,7 @@ trait Recon { Recon =>
     override def toDecimalString: String = java.lang.Long.toString(toLong)
   }
 
-  protected trait ReconFloat extends ReconNumber { this: Number =>
+  protected[recon] trait ReconFloat extends ReconNumber { this: Number =>
     override def isNaN: Boolean = java.lang.Float.isNaN(toFloat)
     override def isInfinite: Boolean = java.lang.Float.isInfinite(toFloat)
 
@@ -618,7 +618,7 @@ trait Recon { Recon =>
     override def toDecimalString: String = java.lang.Float.toString(toFloat)
   }
 
-  protected trait ReconDouble extends ReconNumber { this: Number =>
+  protected[recon] trait ReconDouble extends ReconNumber { this: Number =>
     override def isNaN: Boolean = java.lang.Double.isNaN(toDouble)
     override def isInfinite: Boolean = java.lang.Double.isInfinite(toDouble)
 
@@ -750,7 +750,7 @@ trait Recon { Recon =>
   }
 
 
-  class ReconParser extends ReconFactory with net.coeffect.recon.ReconParser { Parser =>
+  class ReconParser extends ReconFactory with net.coeffect.recon.ReconParser { ReconParser =>
     private[recon] override type Item = Recon.Item
     private[recon] override type Field = Recon.Field
     private[recon] override type Attr = Recon.Attr
@@ -814,7 +814,7 @@ trait Recon { Recon =>
         else Absent
       }
 
-      override def toString: String = (String.Builder~Parser.toString~'.'~"ValueBuilder").state
+      override def toString: String = (String.Builder~ReconParser.toString~'.'~"ValueBuilder").state
     }
 
     private final class RecordBuilder extends ItemBuilder with State[Record] {
@@ -824,213 +824,36 @@ trait Recon { Recon =>
       override def state: Record = self.state
     }
 
-    override def toString: String = (String.Builder~Recon.toString~'.'~"Parser").state
+    override def toString: String = (String.Builder~Recon.toString~'.'~"ReconParser").state
   }
 }
 
 object Recon extends Recon {
-  sealed abstract class Item extends ReconItem
+  override type Item   = net.coeffect.recon.Item
+  override type Field  = net.coeffect.recon.Field
+  override type Attr   = net.coeffect.recon.Attr
+  override type Slot   = net.coeffect.recon.Slot
+  override type Value  = net.coeffect.recon.Value
+  override type Record = net.coeffect.recon.Record
+  override type Text   = net.coeffect.recon.Text
+  override type Number = net.coeffect.recon.Number
+  override type Bool   = net.coeffect.recon.Bool
+  override type Extant = net.coeffect.recon.Extant
+  override type Absent = net.coeffect.recon.Absent
 
-  object Item extends ReconItemFactory
-
-
-  sealed abstract class Field extends Item with ReconField
-
-  object Field extends ReconFieldFactory
-
-
-  final class Attr(
-      override val name: String,
-      override val value: Value)
-    extends Field with ReconAttr
-
-  object Attr extends ReconAttrFactory {
-    override def apply(name: String, value: Value): Attr = new Attr(name, value)
-  }
-
-
-  final class Slot(
-      override val name: String,
-      override val value: Value)
-    extends Field with ReconSlot
-
-  object Slot extends ReconSlotFactory {
-    override def apply(name: String, value: Value): Slot = new Slot(name, value)
-  }
-
-
-  sealed abstract class Value extends Item with ReconValue
-
-  object Value extends ReconValueFactory
-
-
-  final class Record(protected val self: FingerTrieSeq[Item]) extends Value with ReconRecord {
-    private[this] var _index: HashTrieMap[String, Value] = null
-    private[this] def index: HashTrieMap[String, Value] = {
-      if (_index eq null) _index = {
-        var index = HashTrieMap.empty[String, Value]
-        self.foreach { item =>
-          if (item.isField) index += (item.name, item.value)
-        }
-        index
-      }
-      _index
-    }
-
-    override def isEmpty: Boolean = self.isEmpty
-
-    override def length: Int = self.length
-
-    override def contains(name: String): Boolean =
-      if (length > 8) index.contains(name)
-      else self.exists(_.name.equals(name))
-
-    override def apply(index: Int): Item = self(index)
-
-    override def apply(name: String): Value =
-      if (length > 8) index(name)
-      else {
-        val these = self.iterator
-        while (!these.isEmpty) {
-          val item = these.head
-          if (item.name.equals(name)) return item.name
-          these.step()
-        }
-        throw new NoSuchElementException(name)
-      }
-
-    override def / (name: String): Value =
-      if (length > 8) { if (index.contains(name)) index(name) else Absent }
-      else {
-        val these = self.iterator
-        while (!these.isEmpty) {
-          val item = these.head
-          if (item.name.equals(name)) return item.value
-          these.step()
-        }
-        Absent
-      }
-
-    override def :+ (item: Item): Record = new Record(self :+ item)
-
-    override def +: (item: Item): Record = new Record(item +: self)
-
-    override def + (item: Item): Record =
-      if (item.isValue || _index.ne(null) && !_index.contains(item.name)) new Record(self :+ item)
-      else {
-        var i = length - 1
-        val name = item.name
-        while (i >= 0 && !self(i).name.equals(name)) i -= 1
-        if (i >= 0) {
-          if (self(i).value.equals(item.value)) this
-          else new Record(self.update(i, item))
-        }
-        else new Record(self :+ item)
-      }
-
-    override def - (name: String): Record =
-      if (_index.ne(null) && !_index.contains(name)) this
-      else self.filter(!_.name.equals(name))(RecordBuilder)
-
-    override def ++ (that: Record): Record = self.++(that.self)(RecordBuilder)
-
-    override def -- (that: Record): Record = self.filter(item => !that.contains(item.name))(RecordBuilder)
-
-    override def iterator: Iterator[Item] = self.iterator
-
-    override def traverse(f: Item => Unit): Unit = self.traverse(f)
-  }
-
-  object Record extends ReconRecordFactory {
-    override val empty: Record = new Record(FingerTrieSeq.empty)
-
-    implicit override def Builder: Builder[Item] with State[Record] =
-      new RecordBuilder(FingerTrieSeq.Builder)
-  }
-
-  private final class RecordBuilder(self: Builder[Item] with State[FingerTrieSeq[Item]])
-    extends Builder[Item] with State[Record] {
-    override def append(item: Item): Unit = self.append(item)
-    override def clear(): Unit = self.clear()
-    override def expect(count: Int): this.type = { self.expect(count); this }
-    override def state: Record = new Record(self.state)
-    override def toString: String = (String.Builder~Recon.toString~'.'~"Record"~'.'~"Builder").state
-  }
-
-
-  final class Text(protected val self: UString) extends Value with ReconText {
-    private[this] var utf8Size: Int = -1
-    override def utf8Length: Int = {
-      if (utf8Size == -1) utf8Size = super.utf8Length
-      utf8Size
-    }
-
-    override def iterator: Iterator[Int] = self.iterator
-
-    override def toUString: UString = self
-  }
-
-  object Text extends ReconTextFactory {
-    override val empty: Text = new Text(new UString(""))
-
-    override def apply(chars: CharSequence): Text = new Text(new UString(chars.toString))
-
-    implicit override def Builder: StringBuilder with State[Text] = new TextBuilder(UString.Builder)
-  }
-
-  private final class TextBuilder(self: StringBuilder with State[UString])
-    extends StringBuilder with State[Text] {
-    override def append(c: Int): Unit = self.append(c)
-    override def append(cs: CharSequence): Unit = self.append(cs)
-    override def clear(): Unit = self.clear()
-    override def expect(count: Int): this.type = { self.expect(count); this }
-    override def state: Text = new Text(self.state)
-    override def toString: String = (String.Builder~Recon.toString~'.'~"Text"~'.'~"Builder").state
-  }
-
-
-  sealed abstract class Number extends Value with ReconNumber
-
-  private final class IntForm(override val toInt: Int) extends Number with ReconInt
-
-  private final class LongForm(override val toLong: Long) extends Number with ReconLong
-
-  private final class FloatForm(override val toFloat: Float) extends Number with ReconFloat
-
-  private final class DoubleForm(override val toDouble: Double) extends Number with ReconDouble
-
-  object Number extends ReconNumberFactory {
-    override def apply(value: Int): Number = new IntForm(value)
-    override def apply(value: Long): Number = new LongForm(value)
-    override def apply(value: Float): Number = new FloatForm(value)
-    override def apply(value: Double): Number = new DoubleForm(value)
-  }
-
-
-  sealed abstract class Bool extends Value with ReconBool
-
-  object True extends Bool {
-    override def toBoolean: Boolean = true
-  }
-
-  object False extends Bool {
-    override def toBoolean: Boolean = false
-  }
-
-  object Bool extends ReconBoolFactory
-
-
-  sealed abstract class Extant extends Value with ReconExtant
-
-  object Extant extends Extant
-
-
-  sealed abstract class Absent extends Value with ReconAbsent {
-    override def isDefined: Boolean = false
-  }
-
-  object Absent extends Absent
-
+  override val Item   = net.coeffect.recon.Item
+  override val Field  = net.coeffect.recon.Field
+  override val Attr   = net.coeffect.recon.Attr
+  override val Slot   = net.coeffect.recon.Slot
+  override val Value  = net.coeffect.recon.Value
+  override val Record = net.coeffect.recon.Record
+  override val Text   = net.coeffect.recon.Text
+  override val Number = net.coeffect.recon.Number
+  override val Bool   = net.coeffect.recon.Bool
+  override val True   = net.coeffect.recon.True
+  override val False  = net.coeffect.recon.False
+  override val Extant = net.coeffect.recon.Extant
+  override val Absent = net.coeffect.recon.Absent
 
   implicit override lazy val ItemTag: ClassTag[Item] = ClassTag(Predef.classOf[Item])
   implicit override lazy val FieldTag: ClassTag[Field] = ClassTag(Predef.classOf[Field])
@@ -1046,3 +869,206 @@ object Recon extends Recon {
 
   override def toString: String = "Recon"
 }
+
+
+sealed abstract class Item extends Recon.ReconItem
+
+object Item extends Recon.ReconItemFactory
+
+
+sealed abstract class Field extends Item with Recon.ReconField
+
+object Field extends Recon.ReconFieldFactory
+
+
+final class Attr(
+    override val name: String,
+    override val value: Value)
+  extends Field with Recon.ReconAttr
+
+object Attr extends Recon.ReconAttrFactory {
+  override def apply(name: String, value: Value): Attr = new Attr(name, value)
+}
+
+
+final class Slot(
+    override val name: String,
+    override val value: Value)
+  extends Field with Recon.ReconSlot
+
+object Slot extends Recon.ReconSlotFactory {
+  override def apply(name: String, value: Value): Slot = new Slot(name, value)
+}
+
+
+sealed abstract class Value extends Item with Recon.ReconValue
+
+object Value extends Recon.ReconValueFactory
+
+
+final class Record private[recon] (protected val self: FingerTrieSeq[Item]) extends Value with Recon.ReconRecord {
+  private[this] var _index: HashTrieMap[String, Value] = null
+  private[this] def index: HashTrieMap[String, Value] = {
+    if (_index eq null) _index = {
+      var index = HashTrieMap.empty[String, Value]
+      self.foreach { item =>
+        if (item.isField) index += (item.name, item.value)
+      }
+      index
+    }
+    _index
+  }
+
+  override def isEmpty: Boolean = self.isEmpty
+
+  override def length: Int = self.length
+
+  override def contains(name: String): Boolean =
+    if (length > 8) index.contains(name)
+    else self.exists(_.name.equals(name))
+
+  override def apply(index: Int): Item = self(index)
+
+  override def apply(name: String): Value =
+    if (length > 8) index(name)
+    else {
+      val these = self.iterator
+      while (!these.isEmpty) {
+        val item = these.head
+        if (item.name.equals(name)) return item.name
+        these.step()
+      }
+      throw new NoSuchElementException(name)
+    }
+
+  override def / (name: String): Value =
+    if (length > 8) { if (index.contains(name)) index(name) else Absent }
+    else {
+      val these = self.iterator
+      while (!these.isEmpty) {
+        val item = these.head
+        if (item.name.equals(name)) return item.value
+        these.step()
+      }
+      Absent
+    }
+
+  override def :+ (item: Item): Record = new Record(self :+ item)
+
+  override def +: (item: Item): Record = new Record(item +: self)
+
+  override def + (item: Item): Record =
+    if (item.isValue || _index.ne(null) && !_index.contains(item.name)) new Record(self :+ item)
+    else {
+      var i = length - 1
+      val name = item.name
+      while (i >= 0 && !self(i).name.equals(name)) i -= 1
+      if (i >= 0) {
+        if (self(i).value.equals(item.value)) this
+        else new Record(self.update(i, item))
+      }
+      else new Record(self :+ item)
+    }
+
+  override def - (name: String): Record =
+    if (_index.ne(null) && !_index.contains(name)) this
+    else self.filter(!_.name.equals(name))(Recon.RecordBuilder)
+
+  override def ++ (that: Record): Record = self.++(that.self)(Recon.RecordBuilder)
+
+  override def -- (that: Record): Record = self.filter(item => !that.contains(item.name))(Recon.RecordBuilder)
+
+  override def iterator: Iterator[Item] = self.iterator
+
+  override def traverse(f: Item => Unit): Unit = self.traverse(f)
+}
+
+object Record extends Recon.ReconRecordFactory {
+  override val empty: Record = new Record(FingerTrieSeq.empty)
+
+  implicit override def Builder: Builder[Item] with State[Record] =
+    new RecordBuilder(FingerTrieSeq.Builder)
+}
+
+private[recon] final class RecordBuilder(self: Builder[Item] with State[FingerTrieSeq[Item]])
+  extends Builder[Item] with State[Record] {
+  override def append(item: Item): Unit = self.append(item)
+  override def clear(): Unit = self.clear()
+  override def expect(count: Int): this.type = { self.expect(count); this }
+  override def state: Record = new Record(self.state)
+  override def toString: String = (String.Builder~Recon.toString~'.'~"Record"~'.'~"Builder").state
+}
+
+
+final class Text private[recon] (protected val self: UString) extends Value with Recon.ReconText {
+  private[this] var utf8Size: Int = -1
+  override def utf8Length: Int = {
+    if (utf8Size == -1) utf8Size = super.utf8Length
+    utf8Size
+  }
+
+  override def iterator: Iterator[Int] = self.iterator
+
+  override def toUString: UString = self
+}
+
+object Text extends Recon.ReconTextFactory {
+  override val empty: Text = new Text(new UString(""))
+
+  override def apply(chars: CharSequence): Text = new Text(new UString(chars.toString))
+
+  implicit override def Builder: StringBuilder with State[Text] = new TextBuilder(UString.Builder)
+}
+
+private[recon] final class TextBuilder(self: StringBuilder with State[UString])
+  extends StringBuilder with State[Text] {
+  override def append(c: Int): Unit = self.append(c)
+  override def append(cs: CharSequence): Unit = self.append(cs)
+  override def clear(): Unit = self.clear()
+  override def expect(count: Int): this.type = { self.expect(count); this }
+  override def state: Text = new Text(self.state)
+  override def toString: String = (String.Builder~Recon.toString~'.'~"Text"~'.'~"Builder").state
+}
+
+
+sealed abstract class Number extends Value with Recon.ReconNumber
+
+private[recon] final class IntForm(override val toInt: Int) extends Number with Recon.ReconInt
+
+private[recon] final class LongForm(override val toLong: Long) extends Number with Recon.ReconLong
+
+private[recon] final class FloatForm(override val toFloat: Float) extends Number with Recon.ReconFloat
+
+private[recon] final class DoubleForm(override val toDouble: Double) extends Number with Recon.ReconDouble
+
+object Number extends Recon.ReconNumberFactory {
+  override def apply(value: Int): Number = new IntForm(value)
+  override def apply(value: Long): Number = new LongForm(value)
+  override def apply(value: Float): Number = new FloatForm(value)
+  override def apply(value: Double): Number = new DoubleForm(value)
+}
+
+
+sealed abstract class Bool extends Value with Recon.ReconBool
+
+object True extends Bool {
+  override def toBoolean: Boolean = true
+}
+
+object False extends Bool {
+  override def toBoolean: Boolean = false
+}
+
+object Bool extends Recon.ReconBoolFactory
+
+
+sealed abstract class Extant extends Value with Recon.ReconExtant
+
+object Extant extends Extant
+
+
+sealed abstract class Absent extends Value with Recon.ReconAbsent {
+  override def isDefined: Boolean = false
+}
+
+object Absent extends Absent

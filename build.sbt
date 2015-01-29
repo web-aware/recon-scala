@@ -3,7 +3,7 @@ version      := "0.0.0-SNAPSHOT"
 organization := "net.coeffect"
 
 description  := "Record Notation (RECON) Scala Implementation"
-homepage     := Some(url("http://recon.coeffect.net"))
+homepage     := Some(url("http://recon.coeffect.net/scala/"))
 licenses     := Seq("Apache 2" -> url("http://www.apache.org/licenses/LICENSE-2.0.txt"))
 
 scalaVersion := "2.11.5"

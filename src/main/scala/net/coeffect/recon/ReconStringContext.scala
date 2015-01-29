@@ -7,20 +7,27 @@ class ReconStringContext[-R <: Recon](recon: R, stringContext: StringContext) {
   def recon(args: R#Value*): R#Value = macro ReconStringContextMacros.recon[R]
 }
 
-private[recon] class ReconMacros(val c: blackbox.Context { type PrefixType <: Recon }) {
+private[recon] class ReconMacros(val c: blackbox.Context) {
   import c.{ Expr, mirror, prefix, WeakTypeTag }
   import c.universe._
 
-  def ReconStringContext[R <: Recon](stringContext: Expr[StringContext]): Expr[ReconStringContext[R]] = {
-    implicit val ReconStringContextR = ReconStringContextTag[R]
-    Expr[ReconStringContext[R]](q"new $ReconStringContextR($prefix, $stringContext)")
+  def globalReconStringContext(stringContext: Expr[StringContext]): Expr[ReconStringContext[Recon.type]] = {
+    implicit val ReconStringContext =
+      WeakTypeTag[ReconStringContext[Recon.type]](
+        appliedType(
+          mirror.staticClass("net.coeffect.recon.ReconStringContext").toTypeConstructor,
+          mirror.staticModule("net.coeffect.recon.Recon").moduleClass.asClass.toType :: Nil))
+    Expr[ReconStringContext[Recon.type]](q"new $ReconStringContext(_root_.net.coeffect.recon.Recon, $stringContext)")
   }
 
-  implicit private def ReconStringContextTag[R <: Recon]: WeakTypeTag[ReconStringContext[R]] =
-    WeakTypeTag[ReconStringContext[R]](
-      appliedType(
-        mirror.staticClass("net.coeffect.recon.ReconStringContext").toTypeConstructor,
-        (if (prefix.actualType != null) prefix.actualType else prefix.staticType) :: Nil))
+  def prefixReconStringContext[R <: Recon](stringContext: Expr[StringContext]): Expr[ReconStringContext[R]] = {
+    implicit val ReconStringContextR =
+      WeakTypeTag[ReconStringContext[R]](
+        appliedType(
+          mirror.staticClass("net.coeffect.recon.ReconStringContext").toTypeConstructor,
+          (if (prefix.actualType != null) prefix.actualType else prefix.staticType) :: Nil))
+    Expr[ReconStringContext[R]](q"new $ReconStringContextR($prefix, $stringContext)")
+  }
 }
 
 private[recon] class ReconStringContextMacros(val c: blackbox.Context { type PrefixType <: ReconStringContext[_] }) {
@@ -36,9 +43,9 @@ private[recon] class ReconStringContextMacros(val c: blackbox.Context { type Pre
     val factory = new ReconExprFactory[c.type, R](c)(Expr[R](recon))
     var parser = factory.DocumentParser: Iteratee[Int, Expr[R#Value]]
 
-    var input = null: LiteralIterator
+    var input = null: LiteralIterator[c.type]
     while (literals.hasNext && parser.isCont) {
-      input = new LiteralIterator(literals.next())
+      input = new LiteralIterator(c, literals.next())
       while (!input.isEmpty && parser.isCont) parser = parser.feed(input)
       if (values.hasNext && parser.isCont)
         parser = parser.asInstanceOf[factory.Parser[Expr[R#Value]]].interpolate(values.next())
@@ -50,26 +57,35 @@ private[recon] class ReconStringContextMacros(val c: blackbox.Context { type Pre
       case error => abort(input.pos, error.toString)
     }
   }
+}
 
-  private final class LiteralIterator(literal: Tree, private[this] var index: Int) extends Iterator[Int] {
-    def this(literal: Tree) = this(literal, 0)
+private final class LiteralIterator[C <: blackbox.Context](
+    val c: C,
+    _literal: C#Tree,
+    private[this] var index: Int)
+  extends Iterator[Int] {
 
-    private[this] val Literal(Constant(string: String)) = literal
+  def this(c: C, _literal: C#Tree) = this(c, _literal, 0)
 
-    def pos: Position = literal.pos.withPoint(literal.pos.point + index)
+  import c.universe._
 
-    override def isEmpty: Boolean = index >= string.length
+  private[this] val literal: Tree = _literal.asInstanceOf[Tree]
 
-    override def head: Int = {
-      if (index >= string.length) Iterator.empty.head
-      string.codePointAt(index)
-    }
+  private[this] val Literal(Constant(string: String)) = literal
 
-    override def step(): Unit = {
-      if (index >= string.length) Iterator.empty.step()
-      index = string.offsetByCodePoints(index, 1)
-    }
+  def pos: Position = literal.pos.withPoint(literal.pos.point + index)
 
-    override def dup: Iterator[Int] = new LiteralIterator(literal, index)
+  override def isEmpty: Boolean = index >= string.length
+
+  override def head: Int = {
+    if (index >= string.length) Iterator.empty.head
+    string.codePointAt(index)
   }
+
+  override def step(): Unit = {
+    if (index >= string.length) Iterator.empty.step()
+    index = string.offsetByCodePoints(index, 1)
+  }
+
+  override def dup: Iterator[Int] = new LiteralIterator[C](c, literal, index)
 }

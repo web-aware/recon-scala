@@ -149,11 +149,11 @@ Attributed records are concatenated to preceding attributes
 To a first approximation, the RECON data model has the following structure:
 
 ```scala
-abstract class Item                                       // |-- Item
-abstract class Field extends Item                         // |   |-- Field
+sealed abstract class Item                                // |-- Item
+sealed abstract class Field extends Item                  // |   |-- Field
 case class Attr(name: String, value: Value) extends Field // |   |   |-- Attr
 case class Slot(name: String, value: Value) extends Field // |   |   |-- Slot
-abstract class Value extends Item                         // |   |-- Value
+sealed abstract class Value extends Item                  // |   |-- Value
 case class Record(items: Item*) extends Value             // |   |   |-- Record
 case class Text(toString: String) extends Value           // |   |   |-- Text
 case class Number(toDouble: Double) extends Value         // |   |   |-- Number
@@ -168,14 +168,16 @@ To get started with the RECON Scala library, add the `recon-scala` dependency
 to your SBT build.
 
 ```
+resolvers += Resolver.sonatypeRepo("snapshots")
+
 libraryDependencies += "net.coeffect" %% "recon-scala" % "0.0.0-SNAPSHOT"
 ```
 
 The library support compile-time RECON string interpolation.
 
 ```scala
-scala> import net.coeffect.recon.Recon._
-import net.coeffect.recon.Recon._
+scala> import net.coeffect.recon._
+import net.coeffect.recon._
 
 scala> val label = "Example"
 label: String = Example
@@ -192,8 +194,8 @@ scala> recon"""{1, 2 3, 4}"""
 Of course, you can parse and serialize RECON at runtime too.
 
 ```scala
-scala> import net.coeffect.recon.Recon._
-import net.coeffect.recon.Recon._
+scala> import net.coeffect.recon._
+import net.coeffect.recon._
 
 scala> val event = Value.parseRecon("""@event("onClick")""")
 event: net.coeffect.recon.Recon.Value = Record(Attr("event", Text("onClick")))
@@ -205,8 +207,8 @@ res0: String = @event("onClick")
 Use the `/` operator to select named fields:
 
 ```scala
-scala> import net.coeffect.recon.Recon._
-import net.coeffect.recon.Recon._
+scala> import net.coeffect.recon._
+import net.coeffect.recon._
 
 scala> val msg = recon"""{from:"me",to:"you"}"""
 msg: net.coeffect.recon.Recon.Value = Record(Slot("from", Text("me")), Slot("to", Text("you")))
@@ -227,8 +229,8 @@ unintrusive implicit extension methods, and implements them using fast,
 inlined macros.
 
 ```scala
-scala> import net.coeffect.recon.Recon._
-import net.coeffect.recon.Recon._
+scala> import net.coeffect.recon._
+import net.coeffect.recon._
 
 scala> val list = recon"@ol{@li[a],@li[b],@li[c]}"
 list: net.coeffect.recon.Recon.Value = Record(Attr("ol"), Record(Attr("li"), Text("a")), Record(Attr("li"), Text("b")), Record(Attr("li"), Text("c")))
@@ -237,7 +239,7 @@ scala> list.asRecord.map {
      |   case Attr("ol", _) => Attr("ul")
      |   case item => item
      | }
-res0: net.coeffect.recon.Recon.Record = Record(Attr("ul"), Record(Attr("li"), Text("a")), Record(Attr("li"), Text("b")), Record(Attr("li"), Text("c")))
+res0: net.coeffect.recon.Record = Record(Attr("ul"), Record(Attr("li"), Text("a")), Record(Attr("li"), Text("b")), Record(Attr("li"), Text("c")))
 ```
 
 ## Language Grammar
