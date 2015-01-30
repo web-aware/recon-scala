@@ -4,7 +4,7 @@ import basis._
 import basis.collections._
 import basis.text._
 
-private[recon] trait ReconParser extends ReconFactory { Parser =>
+private[recon] trait ReconParser extends ReconFactory { ReconParser =>
   lazy val DocumentParser: Iteratee[Int, Value] = new DocumentParser()
 
   lazy val BlockParser: Iteratee[Int, Value] = new BlockParser()
@@ -26,6 +26,8 @@ private[recon] trait ReconParser extends ReconFactory { Parser =>
   lazy val MarkupParser: Iteratee[Int, Value] = new MarkupParser()
 
   lazy val StringParser: Iteratee[Int, Text] = new StringParser()
+
+  lazy val DataParser: Iteratee[Int, Data] = new DataParser()
 
   lazy val NumberParser: Iteratee[Int, Number] = new NumberParser()
 
@@ -75,6 +77,13 @@ private[recon] trait ReconParser extends ReconFactory { Parser =>
     c >= 0xFDF0 && c <= 0xFFFD ||
     c >= 0x10000 && c <= 0xEFFFF
 
+  private def isBase64Char(c: Int): Boolean =
+    c >= 'A' && c <= 'Z' ||
+    c >= 'a' && c <= 'z' ||
+    c >= '0' && c <= '9' ||
+    c == '+' || c == '-' ||
+    c == '/' || c == '_'
+
 
   private[recon] abstract class Parser[+O] extends Iteratee[Int, O] {
     def interpolate(value: Value): Iteratee[Int, O] =
@@ -104,7 +113,7 @@ private[recon] trait ReconParser extends ReconFactory { Parser =>
 
     override def state: Maybe[Value] = value.state
 
-    override def toString: String = (String.Builder~Parser.toString~'.'~"DocumentParser").state
+    override def toString: String = (String.Builder~ReconParser.toString~'.'~"DocumentParser").state
   }
 
 
@@ -204,7 +213,7 @@ private[recon] trait ReconParser extends ReconFactory { Parser =>
 
     override def state: Maybe[Value] = if (builder ne null) Bind(builder.state) else Trap
 
-    override def toString: String = (String.Builder~Parser.toString~'.'~"BlockParser").state
+    override def toString: String = (String.Builder~ReconParser.toString~'.'~"BlockParser").state
   }
 
 
@@ -218,7 +227,7 @@ private[recon] trait ReconParser extends ReconFactory { Parser =>
       else this
     }
 
-    override def toString: String = (String.Builder~Parser.toString~'.'~"ItemParser").state
+    override def toString: String = (String.Builder~ReconParser.toString~'.'~"ItemParser").state
   }
 
 
@@ -253,7 +262,7 @@ private[recon] trait ReconParser extends ReconFactory { Parser =>
       new NameParser(builder, s)
     }
 
-    override def toString: String = (String.Builder~Parser.toString~'.'~"NameParser").state
+    override def toString: String = (String.Builder~ReconParser.toString~'.'~"NameParser").state
   }
 
 
@@ -334,7 +343,7 @@ private[recon] trait ReconParser extends ReconFactory { Parser =>
     override def state: Maybe[Attr] =
       if (name.isDone) Bind(Attr(name.bind, value.state.bindOrElse(Extant))) else Trap
 
-    override def toString: String = (String.Builder~Parser.toString~'.'~"AttrParser").state
+    override def toString: String = (String.Builder~ReconParser.toString~'.'~"AttrParser").state
   }
 
 
@@ -394,7 +403,7 @@ private[recon] trait ReconParser extends ReconFactory { Parser =>
     override def state: Maybe[Slot] =
       if (name.isDone) Bind(Slot(name.bind, value.state.bindOrElse(Extant))) else Trap
 
-    override def toString: String = (String.Builder~Parser.toString~'.'~"SlotParser").state
+    override def toString: String = (String.Builder~ReconParser.toString~'.'~"SlotParser").state
   }
 
 
@@ -443,6 +452,10 @@ private[recon] trait ReconParser extends ReconFactory { Parser =>
             }
             else if (c == '"') {
               value = StringParser
+              s = 4
+            }
+            else if (c == '%') {
+              value = DataParser
               s = 4
             }
             else if (c == '-' || c >= '0' && c <= '9') {
@@ -534,7 +547,7 @@ private[recon] trait ReconParser extends ReconFactory { Parser =>
 
     override def state: Maybe[Value] = if (builder ne null) Bind(builder.state) else Trap
 
-    override def toString: String = (String.Builder~Parser.toString~'.'~"BlockValueParser").state
+    override def toString: String = (String.Builder~ReconParser.toString~'.'~"BlockValueParser").state
   }
 
 
@@ -662,7 +675,7 @@ private[recon] trait ReconParser extends ReconFactory { Parser =>
 
     override def state: Maybe[Value] = if (builder ne null) Bind(builder.state) else Trap
 
-    override def toString: String = (String.Builder~Parser.toString~'.'~"InlineValueParser").state
+    override def toString: String = (String.Builder~ReconParser.toString~'.'~"InlineValueParser").state
   }
 
 
@@ -782,7 +795,7 @@ private[recon] trait ReconParser extends ReconFactory { Parser =>
 
     override def state: Maybe[Value] = if (builder ne null) Bind(builder.state) else Trap
 
-    override def toString: String = (String.Builder~Parser.toString~'.'~"RecordParser").state
+    override def toString: String = (String.Builder~ReconParser.toString~'.'~"RecordParser").state
   }
 
 
@@ -969,7 +982,7 @@ private[recon] trait ReconParser extends ReconFactory { Parser =>
       else if (text ne null) Bind(text.state)
       else Trap
 
-    override def toString: String = (String.Builder~Parser.toString~'.'~"MarkupParser").state
+    override def toString: String = (String.Builder~ReconParser.toString~'.'~"MarkupParser").state
   }
 
 
@@ -1054,7 +1067,81 @@ private[recon] trait ReconParser extends ReconFactory { Parser =>
 
     override def state: Maybe[Text] = if (text ne null) Bind(text.state) else Trap
 
-    override def toString: String = (String.Builder~Parser.toString~'.'~"StringParser").state
+    override def toString: String = (String.Builder~ReconParser.toString~'.'~"StringParser").state
+  }
+
+
+  private final class DataParser(
+      data: StringBuilder with State[Data],
+      s: Int)
+    extends Parser[Data] {
+
+    def this() = this(null, 1)
+
+    override def feed(input: Iterator[Int]): Iteratee[Int, Data] = {
+      var c = 0
+      var s = this.s
+      val data = if (this.data ne null) this.data else DataBuilder
+      if (s == 1) {
+        if (!input.isEmpty && { c = input.head; c == '%' }) {
+          input.step()
+          s = 2
+        }
+        else if (!input.isEmpty) return error(input, expected = '%', found = c)
+        else if (input.isDone) return unexpectedEOF
+      }
+      while (!input.isEmpty || input.isDone) {
+        if (s == 2) {
+          if (!input.isEmpty && { c = input.head; isBase64Char(c) }) {
+            input.step()
+            data.append(c)
+            s = 3
+          }
+          else if (!input.isEmpty || input.isDone) return Iteratee.done(data.state)
+        }
+        if (s == 3) {
+          if (!input.isEmpty && { c = input.head; isBase64Char(c) }) {
+            input.step()
+            data.append(c)
+            s = 4
+          }
+          else if (!input.isEmpty) return error(input, expected = "base64 digit", found = c)
+          else if (input.isDone) return unexpectedEOF
+        }
+        if (s == 4) {
+          if (!input.isEmpty && { c = input.head; isBase64Char(c) || c == '=' }) {
+            input.step()
+            data.append(c)
+            if (c != '=') s = 5
+            else s = 6
+          }
+          else if (!input.isEmpty) return error(input, expected = "base64 digit", found = c)
+          else if (input.isDone) return unexpectedEOF
+        }
+        if (s == 5) {
+          if (!input.isEmpty && { c = input.head; isBase64Char(c) || c == '=' }) {
+            input.step()
+            data.append(c)
+            if (c != '=') s = 2
+            else return Iteratee.done(data.state)
+          }
+          else if (!input.isEmpty) return error(input, expected = "base64 digit", found = c)
+          else if (input.isDone) return unexpectedEOF
+        }
+        else if (s == 6) {
+          if (!input.isEmpty && { c = input.head; c == '=' }) {
+            input.step()
+            data.append(c)
+            return Iteratee.done(data.state)
+          }
+          else if (!input.isEmpty) return error(input, expected = '=', found = c)
+          else if (input.isDone) return unexpectedEOF
+        }
+      }
+      new DataParser(data, s)
+    }
+
+    override def toString: String = (String.Builder~ReconParser.toString~'.'~"DataParser").state
   }
 
 
@@ -1184,7 +1271,7 @@ private[recon] trait ReconParser extends ReconFactory { Parser =>
       new NumberParser(builder, s)
     }
 
-    override def toString: String = (String.Builder~Parser.toString~'.'~"NumberParser").state
+    override def toString: String = (String.Builder~ReconParser.toString~'.'~"NumberParser").state
   }
 
 
@@ -1238,7 +1325,7 @@ private[recon] trait ReconParser extends ReconFactory { Parser =>
       new TokenParser(builder, s)
     }
 
-    override def toString: String = (String.Builder~Parser.toString~'.'~"TokenParser").state
+    override def toString: String = (String.Builder~ReconParser.toString~'.'~"TokenParser").state
   }
 
 

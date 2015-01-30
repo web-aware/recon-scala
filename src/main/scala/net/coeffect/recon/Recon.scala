@@ -3,6 +3,7 @@ package net.coeffect.recon
 import basis._
 import basis.collections._
 import basis.collections.immutable._
+import basis.data._
 import basis.text._
 import basis.util._
 import scala.reflect._
@@ -16,6 +17,7 @@ trait Recon { Recon =>
   type Value <: ReconValue with Item
   type Record <: ReconRecord with Value
   type Text <: ReconText with Value
+  type Data <: ReconData with Value
   type Number <: ReconNumber with Value
   type Bool <: ReconBool with Value
   type Extant <: ReconExtant with Value
@@ -28,6 +30,7 @@ trait Recon { Recon =>
   val Value: ReconValueFactory
   val Record: ReconRecordFactory
   val Text: ReconTextFactory
+  val Data: ReconDataFactory
   val Number: ReconNumberFactory
   val Bool: ReconBoolFactory
 
@@ -38,6 +41,7 @@ trait Recon { Recon =>
 
   implicit def RecordBuilder: Builder[Item] with From[Record] with State[Record] = Record.Builder
   implicit def TextBuilder: StringBuilder with From[Text] with State[Text] = Text.Builder
+  implicit def DataFramer: Framer with From[Data] with State[Data] = Data.Framer 
 
   implicit lazy val StringToText: String => Text = new StringToText()
   implicit lazy val IntToNumber: Int => Number = new IntToNumber()
@@ -53,6 +57,7 @@ trait Recon { Recon =>
   implicit def ValueTag: ClassTag[Value]
   implicit def RecordTag: ClassTag[Record]
   implicit def TextTag: ClassTag[Text]
+  implicit def DataTag: ClassTag[Data]
   implicit def NumberTag: ClassTag[Number]
   implicit def BoolTag: ClassTag[Bool]
   implicit def ExtantTag: ClassTag[Extant]
@@ -84,6 +89,9 @@ trait Recon { Recon =>
 
     def isText: Boolean = false
     def asText: Text = throw new MatchError("not Text")
+
+    def isData: Boolean = false
+    def asData: Data = throw new MatchError("not Data")
 
     def isNumber: Boolean = false
     def asNumber: Number = throw new MatchError("not a Number")
@@ -503,6 +511,25 @@ trait Recon { Recon =>
   }
 
 
+  trait ReconData extends Equals with Family[Data] with Loader with ReconValue { this: Data =>
+    override def isData: Boolean = true
+    override def asData: Data = this
+
+    override def writeRecon(builder: StringBuilder): Unit = {
+      builder.append('%')
+      this.writeBase64(builder)
+    }
+
+    protected override def stringPrefix: String = "Data"
+  }
+
+  abstract class ReconDataFactory extends DataFactory[Data] {
+    def apply(base64: String): Data = this.fromBase64(base64)
+
+    override def toString: String = (String.Builder~Recon.toString~'.'~"Data").state
+  }
+
+
   trait ReconNumber extends Equals with ReconValue { this: Number =>
     override def isNumber: Boolean = true
     override def asNumber: Number = this
@@ -758,6 +785,7 @@ trait Recon { Recon =>
     private[recon] override type Value = Recon.Value
     private[recon] override type Record = Recon.Record
     private[recon] override type Text = Recon.Text
+    private[recon] override type Data = Recon.Data
     private[recon] override type Number = Recon.Number
     private[recon] override type Bool = Recon.Bool
     private[recon] override type Extant = Recon.Extant
@@ -772,6 +800,7 @@ trait Recon { Recon =>
     private[recon] override def ValueBuilder: ItemBuilder with State[Value] = new ValueBuilder()
     private[recon] override def RecordBuilder: ItemBuilder with State[Record] = new RecordBuilder()
     private[recon] override def TextBuilder: StringBuilder with State[Text] = Recon.TextBuilder
+    private[recon] override def DataFramer: Framer with State[Data] = Recon.DataFramer
 
     private[recon] override def Number(value: String): Number = Recon.Number(value)
 
@@ -836,6 +865,7 @@ object Recon extends Recon {
   override type Value  = net.coeffect.recon.Value
   override type Record = net.coeffect.recon.Record
   override type Text   = net.coeffect.recon.Text
+  override type Data   = net.coeffect.recon.Data
   override type Number = net.coeffect.recon.Number
   override type Bool   = net.coeffect.recon.Bool
   override type Extant = net.coeffect.recon.Extant
@@ -848,6 +878,7 @@ object Recon extends Recon {
   override val Value  = net.coeffect.recon.Value
   override val Record = net.coeffect.recon.Record
   override val Text   = net.coeffect.recon.Text
+  override val Data   = net.coeffect.recon.Data
   override val Number = net.coeffect.recon.Number
   override val Bool   = net.coeffect.recon.Bool
   override val True   = net.coeffect.recon.True
@@ -862,6 +893,7 @@ object Recon extends Recon {
   implicit override lazy val ValueTag: ClassTag[Value] = ClassTag(Predef.classOf[Value])
   implicit override lazy val RecordTag: ClassTag[Record] = ClassTag(Predef.classOf[Record])
   implicit override lazy val TextTag: ClassTag[Text] = ClassTag(Predef.classOf[Text])
+  implicit override lazy val DataTag: ClassTag[Data] = ClassTag(Predef.classOf[Data])
   implicit override lazy val NumberTag: ClassTag[Number] = ClassTag(Predef.classOf[Number])
   implicit override lazy val BoolTag: ClassTag[Bool] = ClassTag(Predef.classOf[Bool])
   implicit override lazy val ExtantTag: ClassTag[Extant] = ClassTag(Predef.classOf[Extant])
@@ -1028,6 +1060,57 @@ private[recon] final class TextBuilder(self: StringBuilder with State[UString])
   override def expect(count: Int): this.type = { self.expect(count); this }
   override def state: Text = new Text(self.state)
   override def toString: String = (String.Builder~Recon.toString~'.'~"Text"~'.'~"Builder").state
+}
+
+
+final class Data private[recon] (protected val self: Loader) extends Value with Recon.ReconData {
+  override def endian: Endianness = self.endian
+
+  override def size: Long = self.size
+
+  override def as[E <: Endianness](endian: E): Data with basis.data.ByteOrder[E] = {
+    if (self.endian eq endian) this
+    else new Data(self as endian)
+  }.asInstanceOf[Data with basis.data.ByteOrder[E]]
+
+  override def loadByte(address: Long): Byte     = self.loadByte(address)
+  override def loadShort(address: Long): Short   = self.loadShort(address)
+  override def loadInt(address: Long): Int       = self.loadInt(address)
+  override def loadLong(address: Long): Long     = self.loadLong(address)
+  override def loadFloat(address: Long): Float   = self.loadFloat(address)
+  override def loadDouble(address: Long): Double = self.loadDouble(address)
+
+  override def reader(address: Long): Reader = self.reader(address)
+
+  override def toArray: Array[Byte] = self.toArray
+}
+
+object Data extends Recon.ReconDataFactory {
+  override def endian: Endianness = NativeEndian
+
+  override val empty: Data = new Data(ArrayData.empty)
+
+  override def from(data: Loader): Data =
+    if (data.isInstanceOf[Data]) data.asInstanceOf[Data]
+    else new Data(data)
+
+  override def Framer: Framer with State[Data] = new DataFramer(ArrayData.Framer)
+}
+
+private[recon] final class DataFramer(self: Framer with State[Loader]) extends Framer with State[Data] {
+  override def endian: Endianness = self.endian
+  override def isEOF: Boolean = self.isEOF
+  override def writeByte(value: Byte): Unit = self.writeByte(value)
+  override def writeShort(value: Short): Unit = self.writeShort(value)
+  override def writeInt(value: Int): Unit = self.writeInt(value)
+  override def writeLong(value: Long): Unit = self.writeLong(value)
+  override def writeFloat(value: Float): Unit = self.writeFloat(value)
+  override def writeDouble(value: Double): Unit = self.writeDouble(value)
+  override def writeData(data: Loader): Unit = self.writeData(data)
+  override def clear(): Unit = self.clear()
+  override def expect(count: Long): this.type = { self.expect(count); this }
+  override def state: Data = new Data(self.state)
+  override def toString: String = (String.Builder~Recon.toString~'.'~"Data"~'.'~"Framer").state
 }
 
 

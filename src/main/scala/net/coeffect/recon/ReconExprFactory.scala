@@ -2,6 +2,7 @@ package net.coeffect.recon
 
 import basis._
 import basis.collections._
+import basis.data._
 import basis.text._
 import scala.reflect.macros._
 
@@ -22,6 +23,7 @@ private[recon] class ReconExprFactory[C <: blackbox.Context, R <: Recon]
   override type Value = Expr[R#Value]
   override type Record = Expr[R#Record]
   override type Text = Expr[R#Text]
+  override type Data = Expr[R#Data]
   override type Number = Expr[R#Number]
   override type Bool = Expr[R#Bool]
   override type Extant = Expr[R#Extant]
@@ -34,6 +36,7 @@ private[recon] class ReconExprFactory[C <: blackbox.Context, R <: Recon]
   implicit protected def ValueTag = WeakTypeTag[R#Value](ReconType("Value"))
   implicit protected def RecordTag = WeakTypeTag[R#Record](ReconType("Record"))
   implicit protected def TextTag = WeakTypeTag[R#Text](ReconType("Text"))
+  implicit protected def DataTag = WeakTypeTag[R#Data](ReconType("Data"))
   implicit protected def NumberTag = WeakTypeTag[R#Number](ReconType("Number"))
   implicit protected def BoolTag = WeakTypeTag[R#Bool](ReconType("Bool"))
   implicit protected def ExtantTag = WeakTypeTag[R#Extant](ReconType("Extant"))
@@ -48,6 +51,7 @@ private[recon] class ReconExprFactory[C <: blackbox.Context, R <: Recon]
   override def ValueBuilder: ItemBuilder with State[Expr[R#Value]] = new ValueBuilder()
   override def RecordBuilder: ItemBuilder with State[Expr[R#Record]] = new RecordBuilder()
   override def TextBuilder: StringBuilder with State[Expr[R#Text]] = new TextBuilder()
+  override def DataFramer: Framer with State[Expr[R#Data]] = new DataFramer()
 
   override def Number(value: String) = Expr[R#Number](q"$recon.Number(${NumberLiteral(value)})")
 
@@ -111,8 +115,30 @@ private[recon] class ReconExprFactory[C <: blackbox.Context, R <: Recon]
     override def clear(): Unit = self.clear()
     override def expect(count: Int): this.type = { self.expect(count); this }
     override def state: Expr[R#Text] = {
-      val value = self.state
-      Expr[R#Text](if (value.length == 0) q"$recon.Text.empty" else q"$recon.Text($value)")
+      val text = self.state
+      Expr[R#Text](if (text.length == 0) q"$recon.Text.empty" else q"$recon.Text($text)")
+    }
+  }
+
+  private final class DataFramer extends Framer with State[Data] {
+    private[this] val self = ArrayData.Framer
+    override def endian: Endianness = self.endian
+    override def isEOF: Boolean = self.isEOF
+    override def writeByte(value: Byte): Unit = self.writeByte(value)
+    override def writeShort(value: Short): Unit = self.writeShort(value)
+    override def writeInt(value: Int): Unit = self.writeInt(value)
+    override def writeLong(value: Long): Unit = self.writeLong(value)
+    override def writeFloat(value: Float): Unit = self.writeFloat(value)
+    override def writeDouble(value: Double): Unit = self.writeDouble(value)
+    override def writeData(data: Loader): Unit = self.writeData(data)
+    override def clear(): Unit = self.clear()
+    override def expect(count: Long): this.type = { self.expect(count); this }
+    override def state: Expr[R#Data] = {
+      val data = self.state
+      Expr[R#Data] {
+        if (data.size == 0L) q"$recon.Data.empty"
+        else q"new _root_.basis.data.DataFactoryOps($recon.Data).fromBase64(${data.toBase64})"
+      }
     }
   }
 

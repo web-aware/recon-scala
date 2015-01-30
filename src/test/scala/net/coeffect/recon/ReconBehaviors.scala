@@ -15,18 +15,30 @@ trait ReconBehaviors extends Matchers { this: FlatSpec =>
     }
 
     it should "serialize empty text" in {
-      Text.empty.toRecon should equal("\"\"")
+      Text.empty.toRecon should equal ("\"\"")
+    }
+
+    it should "serialize non-empty text" in {
+      Text("test").toRecon should equal ("\"test\"")
+    }
+
+    it should "serialize empty data" in {
+      Data.empty.toRecon should equal ("%")
+    }
+
+    it should "serialize non-empty data" in {
+      Data("AA==").toRecon should equal ("%AA==")
     }
 
     it should "serialize numbers" in {
-      Number(0).toRecon should equal("0")
-      Number(1).toRecon should equal("1")
-      Number(-1).toRecon should equal("-1")
-      Number(15).toRecon should equal("15")
-      Number(-20).toRecon should equal("-20")
-      Number(3.14).toRecon should equal("3.14")
-      Number(-0.5).toRecon should equal("-0.5")
-      Number(6.02E23).toRecon should equal("6.02E23")
+      Number(0).toRecon should equal ("0")
+      Number(1).toRecon should equal ("1")
+      Number(-1).toRecon should equal ("-1")
+      Number(15).toRecon should equal ("15")
+      Number(-20).toRecon should equal ("-20")
+      Number(3.14).toRecon should equal ("3.14")
+      Number(-0.5).toRecon should equal ("-0.5")
+      Number(6.02E23).toRecon should equal ("6.02E23")
     }
 
     it should "serialize booleans" in {

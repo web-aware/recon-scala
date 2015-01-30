@@ -30,6 +30,7 @@ scalacOptions in (Compile, console) := Seq(
 resolvers += Resolver.sonatypeRepo("snapshots")
 libraryDependencies ++= Seq(
   "it.reify" %% "basis-core" % "0.2.0-SNAPSHOT",
+  "it.reify" %% "basis-data" % "0.2.0-SNAPSHOT",
   "org.scala-lang" % "scala-reflect" % scalaVersion.value % "provided",
   "org.scalatest" %% "scalatest" % "2.2.1" % "test")
 

@@ -30,6 +30,17 @@ trait ReconStringBehaviors extends Matchers { this: FlatSpec =>
       recon""" "\"\\\/\@\{\}\[\]\b\f\n\r\t" """ should equal (Text("\"\\/@{}[]\b\f\n\r\t"))
     }
 
+    it should "interpolate empty data" in {
+      recon"%" should equal (Data.empty)
+    }
+
+    it should "interpolate non-empty data" in {
+      recon"%AAAA" should equal (Data("AAAA"))
+      recon"%AAA=" should equal (Data("AAA="))
+      recon"%AA==" should equal (Data("AA=="))
+      recon"%ABCDabcd12/+" should equal (Data("ABCDabcd12/+"))
+    }
+
     it should "interpolate positive integers" in {
       recon"0"  should equal (Number(0))
       recon"1"  should equal (Number(1))
@@ -194,6 +205,7 @@ trait ReconStringBehaviors extends Matchers { this: FlatSpec =>
         record:  {}
         markup:  []
         ""
+        %AA==
         integer: 0
         decimal: 0.0
         #true
@@ -202,6 +214,7 @@ trait ReconStringBehaviors extends Matchers { this: FlatSpec =>
         Slot("record", Record.empty),
         Slot("markup", Text.empty),
         Text.empty,
+        Data("AA=="),
         Slot("integer", Number(0)),
         Slot("decimal", Number(0.0)),
         True,
@@ -214,6 +227,7 @@ trait ReconStringBehaviors extends Matchers { this: FlatSpec =>
         record:  {}
         markup:  []
         ""
+        %AA==
         integer: 0
         decimal: 0.0
         #true
@@ -222,6 +236,7 @@ trait ReconStringBehaviors extends Matchers { this: FlatSpec =>
         Slot("record", Record.empty),
         Slot("markup", Text.empty),
         Text.empty,
+        Data("AA=="),
         Slot("integer", Number(0)),
         Slot("decimal", Number(0.0)),
         True,
@@ -247,21 +262,29 @@ trait ReconStringBehaviors extends Matchers { this: FlatSpec =>
     }
 
     it should "interpolate single extant attributes with multiple parameters" in {
-      recon"""@hello("world", 42, #true)""" should equal (
-        Record(Attr("hello", Record(Text("world"), Number(42), True))))
-      recon"""@hello("world"; 42; #true)""" should equal (
-        Record(Attr("hello", Record(Text("world"), Number(42), True))))
+      recon"""@hello("world", %AA==, 42, #true)""" should equal (
+        Record(Attr("hello", Record(Text("world"), Data("AA=="), Number(42), True))))
+      recon"""@hello("world"; %AA==; 42; #true)""" should equal (
+        Record(Attr("hello", Record(Text("world"), Data("AA=="), Number(42), True))))
       recon"""@hello("world"
+                     %AA==
                      42
                      #true)""" should equal (
-        Record(Attr("hello", Record(Text("world"), Number(42), True))))
+        Record(Attr("hello", Record(Text("world"), Data("AA=="), Number(42), True))))
     }
 
     it should "interpolate single extant attributes with named parameters" in {
       recon"""@hello(name: "world")""" should equal (
         Record(Attr("hello", Record(Slot("name", Text("world"))))))
-      recon"""@hello(name: "world", number: 42, #false)""" should equal (
-        Record(Attr("hello", Record(Slot("name", Text("world")), Slot("number", Number(42)), False))))
+      recon"""@hello(name: "world", data: %AA==, number: 42, #false)""" should equal (
+        Record(
+          Attr(
+            "hello",
+            Record(
+              Slot("name", Text("world")),
+              Slot("data", Data("AA==")),
+              Slot("number", Number(42)),
+              False))))
     }
 
     it should "interpolate multiple extant attributes with no parameters" in {
@@ -324,6 +347,22 @@ trait ReconStringBehaviors extends Matchers { this: FlatSpec =>
         Record(Attr("hello", Record(Slot("name", Text("world")))), Text("test")))
     }
 
+    it should "interpolate attributed empty data" in {
+      recon"""@hello % """   should equal (Record(Attr("hello"), Data.empty))
+      recon"""@hello() % """ should equal (Record(Attr("hello"), Data.empty))
+      recon"""@hello("world") % """ should equal (Record(Attr("hello", Text("world")), Data.empty))
+      recon"""@hello(name: "world") % """ should equal(
+        Record(Attr("hello", Record(Slot("name", Text("world")))), Data.empty))
+    }
+
+    it should "interpolate attributed non-empty data" in {
+      recon"""@hello %AA== """   should equal (Record(Attr("hello"), Data("AA==")))
+      recon"""@hello() %AAA= """ should equal (Record(Attr("hello"), Data("AAA=")))
+      recon"""@hello("world") %AAAA """ should equal (Record(Attr("hello", Text("world")), Data("AAAA")))
+      recon"""@hello(name: "world") %ABCDabcd12+/ """ should equal(
+        Record(Attr("hello", Record(Slot("name", Text("world")))), Data("ABCDabcd12+/")))
+    }
+
     it should "interpolate attributed numbers" in {
       recon"""@hello 42"""   should equal (Record(Attr("hello"), Number(42)))
       recon"""@hello() -42""" should equal (Record(Attr("hello"), Number(-42)))
@@ -355,6 +394,7 @@ trait ReconStringBehaviors extends Matchers { this: FlatSpec =>
     it should "interpolate markup with embedded structure" in {
       recon"""[Hello{}world]""" should equal (Record(Text("Hello"), Text("world")))
       recon"""[A: {"answer"}.]""" should equal (Record(Text("A: "), Text("answer"), Text(".")))
+      recon"""[A: {%AA==}.]""" should equal (Record(Text("A: "), Data("AA=="), Text(".")))
       recon"""[A: {42}.]""" should equal (Record(Text("A: "), Number(42), Text(".")))
       recon"""[A: {#true}.]""" should equal (Record(Text("A: "), True, Text(".")))
       recon"""[A: {#false}.]""" should equal (Record(Text("A: "), False, Text(".")))
@@ -427,6 +467,13 @@ trait ReconStringBehaviors extends Matchers { this: FlatSpec =>
       recon"$y" should equal (y)
     }
 
+    it should "substitute top-level data variables" in {
+      val x = recon"%"
+      recon"$x" should equal (x)
+      val y = recon"%AA=="
+      recon"$y" should equal (y)
+    }
+
     it should "substitute top-level number variables" in {
       val x = recon"42"
       recon"$x" should equal (x)
@@ -445,7 +492,7 @@ trait ReconStringBehaviors extends Matchers { this: FlatSpec =>
       val a = Record.empty
       val b = Record(True)
       val c = Text.empty
-      val d = Text("test")
+      val d = Data.empty
       val e = Number(42)
       val f = True
       val g = False

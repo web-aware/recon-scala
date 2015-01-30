@@ -9,10 +9,11 @@ human-friendly syntax.
 
 ## Language Quick Start
 
-RECON has three primitive datatypes: _text_, _number_, and _boolean_.
+RECON has four primitive datatypes: _text_, _data_, _number_, and _boolean_.
 
 ```recon
 "Hello, world!"
+%AA==
 1
 1.41
 #true
@@ -156,6 +157,7 @@ case class Slot(name: String, value: Value) extends Field // |   |   |-- Slot
 sealed abstract class Value extends Item                  // |   |-- Value
 case class Record(items: Item*) extends Value             // |   |   |-- Record
 case class Text(toString: String) extends Value           // |   |   |-- Text
+case class Data(toArray: Array[Byte]) extends Value       // |   |   |-- Data
 case class Number(toDouble: Double) extends Value         // |   |   |-- Number
 case class Bool(toBoolean: Boolean) extends Value         // |   |   |-- Bool
 case object Extant extends Value                          // |   |   |-- Extant
@@ -268,6 +270,8 @@ StringChar ::= Char - ('"' | '\\' | '@' | '{' | '}' | '[' | ']' | '\b' | '\f' | 
 
 CharEscape ::= '\\' ('"' | '\\' | '/' | '@' | '{' | '}' | '[' | ']' | 'b' | 'f' | 'n' | 'r' | 't')
 
+Base64Char ::= [A-Za-z0-9+/]
+
 Block ::= WS* (Slot | BlockValue) SP* ((',' | ';' | NL) Block)? WS*
 
 Name ::= NameStartChar NameChar*
@@ -276,7 +280,7 @@ Attr ::= '@' Name ('(' WS* Block WS* ')')?
 
 Slot ::= Name SP* ':' SP* BlockValue
 
-BlockValue ::= ((Attr SP* BlockValue) | Record | Markup | String | Number | Token)?
+BlockValue ::= ((Attr SP* BlockValue) | Record | Markup | String | Data | Number | Token)?
 
 InlineValue ::= ((Attr SP* InlineValue) | Record | Markup)?
 
@@ -285,6 +289,8 @@ Record ::= '{' WS* Block WS* '}'
 Markup ::= '[' (MarkupChar* | CharEscape | InlineValue)* ']'
 
 String ::= '"' (StringChar* | CharEscape)* '"'
+
+Data ::= '%' (Base64Char{4})* (Base64Char Base64Char ((Base64Char '=') | ('=' '=')))?
 
 Number ::= '-'? (([1-9] [0-9]*) | [0-9]) ('.' [0-9]+)? (('E' | 'e') ('+' | '-')? [0-9]+)?
 
