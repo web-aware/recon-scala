@@ -68,6 +68,9 @@ trait Recon { Recon =>
 
   lazy val ReconParser: ReconParser = new ReconParser()
 
+  def apply[@specialized(Mold.Specialized) T](value: T)(implicit mold: Mold[T]): Value =
+    mold.form(Recon)(value)
+
 
   trait ReconItem { this: Item =>
     def isDefined: Boolean = true
@@ -110,6 +113,10 @@ trait Recon { Recon =>
 
     def / (name: String): Value
 
+    def cast[T](implicit mold: Mold[T]): Maybe[T]
+
+    def coerce[@specialized(Mold.Specialized) T](implicit mold: Mold[T]): T
+
     def writeReconBlock(builder: StringBuilder): Unit = writeRecon(builder)
 
     private[recon] def writeRecon(builder: StringBuilder, inMarkup: Boolean): Unit = writeRecon(builder)
@@ -135,6 +142,12 @@ trait Recon { Recon =>
     override def asField: Field = this
 
     override def / (name: String): Value = value / name
+
+    override def cast[T](implicit mold: Mold[T]): Maybe[T] =
+      value.cast[T](mold)
+
+    override def coerce[@specialized(Mold.Specialized) T](implicit mold: Mold[T]): T =
+      value.coerce[T](mold)
   }
 
   abstract class ReconFieldFactory {
@@ -236,6 +249,12 @@ trait Recon { Recon =>
     override def value: Value = this
 
     override def / (name: String): Value = Absent
+
+    override def cast[T](implicit mold: Mold[T]): Maybe[T] =
+      mold.cast(Recon)(this)
+
+    override def coerce[@specialized(Mold.Specialized) T](implicit mold: Mold[T]): T =
+      mold.cast(Recon)(this).bindOrElse(mold.unit)
   }
 
   abstract class ReconValueFactory {
@@ -302,6 +321,9 @@ trait Recon { Recon =>
     def contains(name: String): Boolean
 
     def apply(name: String): Value
+
+    def head: Item
+    def tail: Record
 
     def :+ (item: Item): Record
     def +: (item: Item): Record
@@ -452,11 +474,36 @@ trait Recon { Recon =>
       builder.append(']')
     }
 
+    def valuesIterator: Iterator[Value] = new ReconRecordValuesIterator(iterator)
+
     protected override def stringPrefix: String = "Record"
   }
 
   abstract class ReconRecordFactory extends special.SeqSource[Record, Item] {
+    def parseRecon(recon: String): Record = {
+      val result = ReconParser.BlockParser.run(new UString(recon).iterator)
+      if (result.isDone) {
+        val value = result.bind
+        if (value.isRecord) value.asRecord
+        else apply(value)
+      }
+      else result.trap match {
+        case ex: Throwable => throw ex
+        case error => throw new ReconException(error.toString)
+      }
+    }
+
     override def toString: String = (String.Builder~Recon.toString~'.'~"Record").state
+  }
+
+  private final class ReconRecordValuesIterator(self: Iterator[Item]) extends Iterator[Value] {
+    override def isEmpty: Boolean = self.isEmpty
+
+    override def head: Value = self.head.value
+
+    override def step(): Unit = self.step()
+
+    override def dup: Iterator[Value] = new ReconRecordValuesIterator(self.dup)
   }
 
 
@@ -938,7 +985,9 @@ sealed abstract class Value extends Item with Recon.ReconValue
 object Value extends Recon.ReconValueFactory
 
 
-final class Record private[recon] (protected val self: FingerTrieSeq[Item]) extends Value with Recon.ReconRecord {
+final class Record private[recon] (protected val self: FingerTrieSeq[Item])
+  extends Value with Recon.ReconRecord {
+
   private[this] var _index: HashTrieMap[String, Value] = null
   private[this] def index: HashTrieMap[String, Value] = {
     if (_index eq null) _index = {
@@ -984,6 +1033,10 @@ final class Record private[recon] (protected val self: FingerTrieSeq[Item]) exte
       }
       Absent
     }
+
+  override def head: Item = self.head
+
+  override def tail: Record = new Record(self.tail)
 
   override def :+ (item: Item): Record = new Record(self :+ item)
 
