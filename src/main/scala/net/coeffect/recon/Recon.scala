@@ -117,6 +117,8 @@ trait Recon { Recon =>
 
     def coerce[@specialized(Mold.Specialized) T](implicit mold: Mold[T]): T
 
+    def in(recon: Recon): recon.Item
+
     def writeReconBlock(builder: StringBuilder): Unit = writeRecon(builder)
 
     private[recon] def writeRecon(builder: StringBuilder, inMarkup: Boolean): Unit = writeRecon(builder)
@@ -148,6 +150,8 @@ trait Recon { Recon =>
 
     override def coerce[@specialized(Mold.Specialized) T](implicit mold: Mold[T]): T =
       value.coerce[T](mold)
+
+    override def in(recon: Recon): recon.Field
   }
 
   abstract class ReconFieldFactory {
@@ -170,6 +174,10 @@ trait Recon { Recon =>
         builder.append(')')
       }
     }
+
+    override def in(recon: Recon): recon.Attr =
+      if (recon eq Recon) asInstanceOf[recon.Attr]
+      else recon.Attr(name, value in recon)
 
     override def canEqual(other: Any): Boolean = other.isInstanceOf[ReconAttr]
 
@@ -210,6 +218,10 @@ trait Recon { Recon =>
       builder.append(':')
       if (!value.isExtant) value.writeRecon(builder)
     }
+
+    override def in(recon: Recon): recon.Slot =
+      if (recon eq Recon) asInstanceOf[recon.Slot]
+      else recon.Slot(name, value in recon)
 
     override def canEqual(other: Any): Boolean = other.isInstanceOf[ReconSlot]
 
@@ -255,6 +267,8 @@ trait Recon { Recon =>
 
     override def coerce[@specialized(Mold.Specialized) T](implicit mold: Mold[T]): T =
       mold.cast(Recon)(this).bindOrElse(mold.unit)
+
+    override def in(recon: Recon): recon.Value
   }
 
   abstract class ReconValueFactory {
@@ -474,6 +488,10 @@ trait Recon { Recon =>
       builder.append(']')
     }
 
+    override def in(recon: Recon): recon.Record =
+      if (recon eq Recon) asInstanceOf[recon.Record]
+      else this.map(_ in recon)(recon.RecordBuilder)
+
     def valuesIterator: Iterator[Value] = new ReconRecordValuesIterator(iterator)
 
     protected override def stringPrefix: String = "Record"
@@ -548,6 +566,10 @@ trait Recon { Recon =>
 
     override def writeRecon(builder: StringBuilder): Unit = writeRecon(builder, inMarkup = false)
 
+    override def in(recon: Recon): recon.Text =
+      if (recon eq Recon) asInstanceOf[recon.Text]
+      else recon.Text(toUString.toString)
+
     protected override def stringPrefix: String = "Text"
   }
 
@@ -566,6 +588,10 @@ trait Recon { Recon =>
       builder.append('%')
       this.writeBase64(builder)
     }
+
+    override def in(recon: Recon): recon.Data =
+      if (recon eq Recon) asInstanceOf[recon.Data]
+      else recon.Data.from(this)
 
     protected override def stringPrefix: String = "Data"
   }
@@ -603,6 +629,8 @@ trait Recon { Recon =>
     override def writeRecon(builder: StringBuilder): Unit = builder.append(toDecimalString)
 
     override def toRecon: String = toDecimalString
+
+    override def in(recon: Recon): recon.Number
 
     override def canEqual(other: Any): Boolean = other.isInstanceOf[ReconNumber]
 
@@ -652,6 +680,10 @@ trait Recon { Recon =>
     override def toFloat: Float = toInt.toFloat
     override def toDouble: Double = toInt.toDouble
     override def toDecimalString: String = java.lang.Integer.toString(toInt)
+
+    override def in(recon: Recon): recon.Number =
+      if (recon eq Recon) asInstanceOf[recon.Number]
+      else recon.Number(toInt)
   }
 
   protected[recon] trait ReconLong extends ReconNumber { this: Number =>
@@ -671,6 +703,10 @@ trait Recon { Recon =>
     override def toFloat: Float = toLong.toFloat
     override def toDouble: Double = toLong.toDouble
     override def toDecimalString: String = java.lang.Long.toString(toLong)
+
+    override def in(recon: Recon): recon.Number =
+      if (recon eq Recon) asInstanceOf[recon.Number]
+      else recon.Number(toLong)
   }
 
   protected[recon] trait ReconFloat extends ReconNumber { this: Number =>
@@ -690,6 +726,10 @@ trait Recon { Recon =>
     override def toLong: Long = toFloat.toLong
     override def toDouble: Double = toFloat.toDouble
     override def toDecimalString: String = java.lang.Float.toString(toFloat)
+
+    override def in(recon: Recon): recon.Number =
+      if (recon eq Recon) asInstanceOf[recon.Number]
+      else recon.Number(toFloat)
   }
 
   protected[recon] trait ReconDouble extends ReconNumber { this: Number =>
@@ -709,6 +749,10 @@ trait Recon { Recon =>
     override def toLong: Long = toDouble.toLong
     override def toFloat: Float = toDouble.toFloat
     override def toDecimalString: String = java.lang.Double.toString(toDouble)
+
+    override def in(recon: Recon): recon.Number =
+      if (recon eq Recon) asInstanceOf[recon.Number]
+      else recon.Number(toDouble)
   }
 
   abstract class ReconNumberFactory {
@@ -743,6 +787,8 @@ trait Recon { Recon =>
 
     override def toRecon: String = if (toBoolean) "#true" else "#false"
 
+    override def in(recon: Recon): recon.Bool = recon.Bool(toBoolean)
+
     override def canEqual(other: Any): Boolean = other.isInstanceOf[ReconBool]
 
     override def equals(other: Any): Boolean = eq(other.asInstanceOf[AnyRef]) || (other match {
@@ -775,6 +821,8 @@ trait Recon { Recon =>
 
     override def toRecon: String = ""
 
+    override def in(recon: Recon): recon.Extant = recon.Extant
+
     override def toString: String = "Extant"
   }
 
@@ -788,6 +836,8 @@ trait Recon { Recon =>
     override def writeRecon(builder: StringBuilder): Unit = ()
 
     override def toRecon: String = ""
+
+    override def in(recon: Recon): recon.Absent = recon.Absent
 
     override def toString: String = "Absent"
   }
