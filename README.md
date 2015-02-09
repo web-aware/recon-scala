@@ -178,14 +178,14 @@ libraryDependencies += "net.coeffect" %% "recon-scala" % "0.0.0-SNAPSHOT"
 The library support compile-time RECON string interpolation.
 
 ```scala
-scala> import net.coeffect.recon._
-import net.coeffect.recon._
+scala> import recon._
+import recon._
 
 scala> val label = "Example"
 label: String = Example
 
 scala> recon"""@a(href:"example.com")[$label]"""
-res0: net.coeffect.recon.Recon.Value = Record(Attr("a", Record(Slot("href", Text("example.com")))), Text("Example"))
+res0: recon.Recon.Value = Record(Attr("a", Record(Slot("href", Text("example.com")))), Text("Example"))
 
 scala> recon"""{1, 2 3, 4}"""
 <console>:11: error: expected '}', ';', ',', or newline, but found '3'
@@ -196,11 +196,11 @@ scala> recon"""{1, 2 3, 4}"""
 Of course, you can parse and serialize RECON at runtime too.
 
 ```scala
-scala> import net.coeffect.recon._
-import net.coeffect.recon._
+scala> import recon._
+import recon._
 
 scala> val event = Value.parseRecon("""@event("onClick")""")
-event: net.coeffect.recon.Recon.Value = Record(Attr("event", Text("onClick")))
+event: recon.Recon.Value = Record(Attr("event", Text("onClick")))
 
 scala> event.toRecon
 res0: String = @event("onClick")
@@ -209,20 +209,20 @@ res0: String = @event("onClick")
 Use the `/` operator to select named fields:
 
 ```scala
-scala> import net.coeffect.recon._
-import net.coeffect.recon._
+scala> import recon._
+import recon._
 
 scala> val msg = recon"""{from:"me",to:"you"}"""
-msg: net.coeffect.recon.Recon.Value = Record(Slot("from", Text("me")), Slot("to", Text("you")))
+msg: recon.Recon.Value = Record(Slot("from", Text("me")), Slot("to", Text("you")))
 
 scala> msg / "from"
-res0: net.coeffect.recon.Recon.Value = Text("me")
+res0: recon.Recon.Value = Text("me")
 
 scala> msg / "to"
-res1: net.coeffect.recon.Recon.Value = Text("you")
+res1: recon.Recon.Value = Text("you")
 
 scala> msg / "body"
-res2: net.coeffect.recon.Recon.Value = Absent
+res2: recon.Recon.Value = Absent
 ```
 
 Higher order collection operations and transformations just work.  The
@@ -231,17 +231,17 @@ unintrusive implicit extension methods, and implements them using fast,
 inlined macros.
 
 ```scala
-scala> import net.coeffect.recon._
-import net.coeffect.recon._
+scala> import recon._
+import recon._
 
 scala> val list = recon"@ol{@li[a],@li[b],@li[c]}"
-list: net.coeffect.recon.Recon.Value = Record(Attr("ol"), Record(Attr("li"), Text("a")), Record(Attr("li"), Text("b")), Record(Attr("li"), Text("c")))
+list: recon.Recon.Value = Record(Attr("ol"), Record(Attr("li"), Text("a")), Record(Attr("li"), Text("b")), Record(Attr("li"), Text("c")))
 
 scala> list.asRecord.map {
      |   case Attr("ol", _) => Attr("ul")
      |   case item => item
      | }
-res0: net.coeffect.recon.Record = Record(Attr("ul"), Record(Attr("li"), Text("a")), Record(Attr("li"), Text("b")), Record(Attr("li"), Text("c")))
+res0: recon.Record = Record(Attr("ul"), Record(Attr("li"), Text("a")), Record(Attr("li"), Text("b")), Record(Attr("li"), Text("c")))
 ```
 
 ## Language Grammar

@@ -1,4 +1,4 @@
-package net.coeffect.recon
+package recon
 
 import basis._
 import basis.collections._
@@ -874,7 +874,7 @@ trait Recon { Recon =>
   }
 
 
-  class ReconParser extends ReconFactory with net.coeffect.recon.ReconParser { ReconParser =>
+  class ReconParser extends ReconFactory with recon.ReconParser { ReconParser =>
     private[recon] override type Item = Recon.Item
     private[recon] override type Field = Recon.Field
     private[recon] override type Attr = Recon.Attr
@@ -955,33 +955,33 @@ trait Recon { Recon =>
 }
 
 object Recon extends Recon {
-  override type Item   = net.coeffect.recon.Item
-  override type Field  = net.coeffect.recon.Field
-  override type Attr   = net.coeffect.recon.Attr
-  override type Slot   = net.coeffect.recon.Slot
-  override type Value  = net.coeffect.recon.Value
-  override type Record = net.coeffect.recon.Record
-  override type Text   = net.coeffect.recon.Text
-  override type Data   = net.coeffect.recon.Data
-  override type Number = net.coeffect.recon.Number
-  override type Bool   = net.coeffect.recon.Bool
-  override type Extant = net.coeffect.recon.Extant
-  override type Absent = net.coeffect.recon.Absent
+  override type Item   = recon.Item
+  override type Field  = recon.Field
+  override type Attr   = recon.Attr
+  override type Slot   = recon.Slot
+  override type Value  = recon.Value
+  override type Record = recon.Record
+  override type Text   = recon.Text
+  override type Data   = recon.Data
+  override type Number = recon.Number
+  override type Bool   = recon.Bool
+  override type Extant = recon.Extant
+  override type Absent = recon.Absent
 
-  override val Item   = net.coeffect.recon.Item
-  override val Field  = net.coeffect.recon.Field
-  override val Attr   = net.coeffect.recon.Attr
-  override val Slot   = net.coeffect.recon.Slot
-  override val Value  = net.coeffect.recon.Value
-  override val Record = net.coeffect.recon.Record
-  override val Text   = net.coeffect.recon.Text
-  override val Data   = net.coeffect.recon.Data
-  override val Number = net.coeffect.recon.Number
-  override val Bool   = net.coeffect.recon.Bool
-  override val True   = net.coeffect.recon.True
-  override val False  = net.coeffect.recon.False
-  override val Extant = net.coeffect.recon.Extant
-  override val Absent = net.coeffect.recon.Absent
+  override val Item   = recon.Item
+  override val Field  = recon.Field
+  override val Attr   = recon.Attr
+  override val Slot   = recon.Slot
+  override val Value  = recon.Value
+  override val Record = recon.Record
+  override val Text   = recon.Text
+  override val Data   = recon.Data
+  override val Number = recon.Number
+  override val Bool   = recon.Bool
+  override val True   = recon.True
+  override val False  = recon.False
+  override val Extant = recon.Extant
+  override val Absent = recon.Absent
 
   implicit override lazy val ItemTag: ClassTag[Item] = ClassTag(Predef.classOf[Item])
   implicit override lazy val FieldTag: ClassTag[Field] = ClassTag(Predef.classOf[Field])

@@ -1,4 +1,4 @@
-package net.coeffect.recon
+package recon
 
 import basis.collections._
 import basis.text._

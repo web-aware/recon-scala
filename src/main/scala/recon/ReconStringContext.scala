@@ -1,4 +1,4 @@
-package net.coeffect.recon
+package recon
 
 import basis.collections._
 import scala.reflect.macros._
@@ -15,16 +15,16 @@ private[recon] class ReconMacros(val c: blackbox.Context) {
     implicit val ReconStringContext =
       WeakTypeTag[ReconStringContext[Recon.type]](
         appliedType(
-          mirror.staticClass("net.coeffect.recon.ReconStringContext").toTypeConstructor,
-          mirror.staticModule("net.coeffect.recon.Recon").moduleClass.asClass.toType :: Nil))
-    Expr[ReconStringContext[Recon.type]](q"new $ReconStringContext(_root_.net.coeffect.recon.Recon, $stringContext)")
+          mirror.staticClass("recon.ReconStringContext").toTypeConstructor,
+          mirror.staticModule("recon.Recon").moduleClass.asClass.toType :: Nil))
+    Expr[ReconStringContext[Recon.type]](q"new $ReconStringContext(_root_.recon.Recon, $stringContext)")
   }
 
   def prefixReconStringContext[R <: Recon](stringContext: Expr[StringContext]): Expr[ReconStringContext[R]] = {
     implicit val ReconStringContextR =
       WeakTypeTag[ReconStringContext[R]](
         appliedType(
-          mirror.staticClass("net.coeffect.recon.ReconStringContext").toTypeConstructor,
+          mirror.staticClass("recon.ReconStringContext").toTypeConstructor,
           (if (prefix.actualType != null) prefix.actualType else prefix.staticType) :: Nil))
     Expr[ReconStringContext[R]](q"new $ReconStringContextR($prefix, $stringContext)")
   }

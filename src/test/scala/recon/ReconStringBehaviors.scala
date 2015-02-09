@@ -1,4 +1,4 @@
-package net.coeffect.recon
+package recon
 
 import org.scalatest._
 

@@ -1,5 +1,3 @@
-package net.coeffect
-
 import basis._
 import basis.collections._
 import basis.data._
