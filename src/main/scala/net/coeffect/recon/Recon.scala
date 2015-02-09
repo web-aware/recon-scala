@@ -985,19 +985,22 @@ sealed abstract class Value extends Item with Recon.ReconValue
 object Value extends Recon.ReconValueFactory
 
 
-final class Record private[recon] (protected val self: FingerTrieSeq[Item])
+final class Record private[recon] (
+    protected val self: FingerTrieSeq[Item],
+    private[this] var index: HashTrieMap[String, Value])
   extends Value with Recon.ReconRecord {
 
-  private[this] var _index: HashTrieMap[String, Value] = null
-  private[this] def index: HashTrieMap[String, Value] = {
-    if (_index eq null) _index = {
+  private[recon] def this(self: FingerTrieSeq[Item]) = this(self, null)
+
+  private[this] def fields: HashTrieMap[String, Value] = {
+    if (index eq null) index = {
       var index = HashTrieMap.empty[String, Value]
       self.foreach { item =>
         if (item.isField) index += (item.name, item.value)
       }
       index
     }
-    _index
+    index
   }
 
   override def isEmpty: Boolean = self.isEmpty
@@ -1005,13 +1008,13 @@ final class Record private[recon] (protected val self: FingerTrieSeq[Item])
   override def length: Int = self.length
 
   override def contains(name: String): Boolean =
-    if (length > 8) index.contains(name)
+    if (length > 8) fields.contains(name)
     else self.exists(_.name.equals(name))
 
   override def apply(index: Int): Item = self(index)
 
   override def apply(name: String): Value =
-    if (length > 8) index(name)
+    if (length > 8) fields(name)
     else {
       val these = self.iterator
       while (!these.isEmpty) {
@@ -1023,7 +1026,7 @@ final class Record private[recon] (protected val self: FingerTrieSeq[Item])
     }
 
   override def / (name: String): Value =
-    if (length > 8) { if (index.contains(name)) index(name) else Absent }
+    if (length > 8) { if (fields.contains(name)) fields(name) else Absent }
     else {
       val these = self.iterator
       while (!these.isEmpty) {
@@ -1036,32 +1039,55 @@ final class Record private[recon] (protected val self: FingerTrieSeq[Item])
 
   override def head: Item = self.head
 
-  override def tail: Record = new Record(self.tail)
+  override def tail: Record =
+    new Record(self.tail, if ((index ne null) && self.head.isValue) index else null)
 
-  override def :+ (item: Item): Record = new Record(self :+ item)
+  override def :+ (item: Item): Record =
+    new Record(
+      self :+ item,
+      if (index ne null) {
+        if (item.isField) index + (item.name, item.value)
+        else index
+      }
+      else null)
 
-  override def +: (item: Item): Record = new Record(item +: self)
+  override def +: (item: Item): Record =
+    new Record(
+      item +: self,
+      if (index ne null) {
+        if (item.isField && !index.contains(item.name)) index + (item.name, item.value)
+        else index
+      }
+      else null)
 
   override def + (item: Item): Record =
-    if (item.isValue || _index.ne(null) && !_index.contains(item.name)) new Record(self :+ item)
+    if (item.isValue)
+      new Record(self :+ item, index)
+    else if ((index ne null) && !index.contains(item.name))
+      new Record(self :+ item, index + (item.name, item.value))
     else {
       var i = length - 1
       val name = item.name
       while (i >= 0 && !self(i).name.equals(name)) i -= 1
       if (i >= 0) {
         if (self(i).value.equals(item.value)) this
-        else new Record(self.update(i, item))
+        else new Record(self.update(i, item), if (index ne null) index + (name, item.value) else null)
       }
-      else new Record(self :+ item)
+      else new Record(self :+ item, index)
     }
 
   override def - (name: String): Record =
-    if (_index.ne(null) && !_index.contains(name)) this
-    else self.filter(!_.name.equals(name))(Recon.RecordBuilder)
+    if ((index ne null) && !index.contains(name)) this
+    else
+      new Record(
+        self.filter(!_.name.equals(name))(FingerTrieSeq.Builder),
+        if (index ne null) index - name else null)
 
-  override def ++ (that: Record): Record = self.++(that.self)(Recon.RecordBuilder)
+  override def ++ (that: Record): Record =
+    self.++(that.self)(Recon.RecordBuilder)
 
-  override def -- (that: Record): Record = self.filter(item => !that.contains(item.name))(Recon.RecordBuilder)
+  override def -- (that: Record): Record =
+    self.filter(item => !that.contains(item.name))(Recon.RecordBuilder)
 
   override def iterator: Iterator[Item] = self.iterator
 
