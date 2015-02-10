@@ -422,7 +422,11 @@ trait Recon { Recon =>
                 builder.append('}')
               }
             }
-            else item.writeRecon(builder, inMarkup = false)
+            else {
+              if (item.isSlot) builder.append('{')
+              item.writeRecon(builder, inMarkup = false)
+              if (item.isSlot) builder.append('}')
+            }
           }
           else {
             builder.append('{')
