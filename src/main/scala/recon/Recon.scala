@@ -108,6 +108,8 @@ trait Recon { Recon =>
 
     def / (key: Value): Value
 
+    def / (key: String): Value = this / Text(key)
+
     def cast[T](implicit mold: Mold[T]): Maybe[T]
 
     def coerce[@specialized(Mold.Specialized) T](implicit mold: Mold[T]): T
