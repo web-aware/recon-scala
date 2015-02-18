@@ -25,7 +25,6 @@ private[recon] class ReconExprFactory[C <: blackbox.Context, R <: Recon]
   override type Text = Expr[R#Text]
   override type Data = Expr[R#Data]
   override type Number = Expr[R#Number]
-  override type Bool = Expr[R#Bool]
   override type Extant = Expr[R#Extant]
   override type Absent = Expr[R#Absent]
 
@@ -38,15 +37,14 @@ private[recon] class ReconExprFactory[C <: blackbox.Context, R <: Recon]
   implicit protected def TextTag = WeakTypeTag[R#Text](ReconType("Text"))
   implicit protected def DataTag = WeakTypeTag[R#Data](ReconType("Data"))
   implicit protected def NumberTag = WeakTypeTag[R#Number](ReconType("Number"))
-  implicit protected def BoolTag = WeakTypeTag[R#Bool](ReconType("Bool"))
   implicit protected def ExtantTag = WeakTypeTag[R#Extant](ReconType("Extant"))
   implicit protected def AbsentTag = WeakTypeTag[R#Absent](ReconType("Absent"))
 
-  override def Attr(name: String, value: Expr[R#Value]) = Expr[R#Attr](q"$recon.Attr($name, $value)")
-  override def Attr(name: String) = Expr[R#Attr](q"$recon.Attr($name)")
+  override def Attr(key: Expr[R#Text], value: Expr[R#Value]) = Expr[R#Attr](q"$recon.Attr($key, $value)")
+  override def Attr(key: Expr[R#Text]) = Expr[R#Attr](q"$recon.Attr($key)")
 
-  override def Slot(name: String, value: Expr[R#Value]) = Expr[R#Slot](q"$recon.Slot($name, $value)")
-  override def Slot(name: String) = Expr[R#Slot](q"$recon.Slot($name)")
+  override def Slot(key: Expr[R#Value], value: Expr[R#Value]) = Expr[R#Slot](q"$recon.Slot($key, $value)")
+  override def Slot(key: Expr[R#Value]) = Expr[R#Slot](q"$recon.Slot($key)")
 
   override def ValueBuilder: ItemBuilder with State[Expr[R#Value]] = new ValueBuilder()
   override def RecordBuilder: ItemBuilder with State[Expr[R#Record]] = new RecordBuilder()
@@ -55,8 +53,8 @@ private[recon] class ReconExprFactory[C <: blackbox.Context, R <: Recon]
 
   override def Number(value: String) = Expr[R#Number](q"$recon.Number(${NumberLiteral(value)})")
 
-  override def True = Expr[R#Bool](q"$recon.True")
-  override def False = Expr[R#Bool](q"$recon.False")
+  override def True = Expr[R#Value](q"$recon.True")
+  override def False = Expr[R#Value](q"$recon.False")
 
   override def Extant = Expr[R#Extant](q"$recon.Extant")
   override def Absent = Expr[R#Absent](q"$recon.Absent")

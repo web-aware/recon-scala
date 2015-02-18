@@ -2,34 +2,56 @@
 
 [![Build Status](https://travis-ci.org/coeffect/recon-scala.svg?branch=master)](https://travis-ci.org/coeffect/recon-scala)
 
-RECON brings attributes into the age of object notation, and provides a simple
+RECON brings attributes into the era of object notation, and provides a simple
 grammar and uniform tree model for attributed text markup.  RECON aims to
 combine the minimalism of JSON with the expressiveness of XML in a
 human-friendly syntax.
 
 ## Language Quick Start
 
-RECON has four primitive datatypes: _text_, _data_, _number_, and _boolean_.
+### Primtives
+
+RECON has three primitive datatypes: _text_, _number_, and _data_.
+
+#### Text
+
+Text values can take one of three forms: _string_, _markup_, or _identifier_.
 
 ```recon
-"Hello, world!"
-%AA==
-1
-1.41
-#true
-#false
+"string"
+[markup]
+identifier
 ```
 
-The _record_ datatype aggregares values, playing the mixed role of array and
-associative array.  Think of a record as a partially keyed list.  The example
-record below has two items: a "subject" field with value "Greetings", followed
-by an unkeyed string.
+#### Numbers
+
+Numbers enocde as decimal literals.
+
+```recon
+1
+1.41
+```
+
+#### Data
+
+RECON encodes binary data as base64 literals following an initial `%`.
+
+```recon
+%AA==
+```
+
+### Records
+
+RECON's sole aggregate datatype, the _record_, plays the combined role of array
+and associative array.  Think of a record as a partially keyed list.  The
+example record below has two items: a "subject" field with value "Greetings",
+followed by an unkeyed string.
 
 ```recon
 { subject: "Greetings", "Hello, Earthlings!" }
 ```
 
-Newlines can separate items, giving hand-crafted documents a cleaner look.
+Newlines can separate items too, giving pretty-printed documents a cleaner look.
 
 ```recon
 {
@@ -38,31 +60,49 @@ Newlines can separate items, giving hand-crafted documents a cleaner look.
 }
 ```
 
-Multiple items in a block automatically form a record, so documents can omit
-the root brackets.  The example below is equivalent to the one above.
+Records support arbitrary values as slot keys.
+
+```recon
+{
+  @planet Jupiter: {}
+  @god Jupiter: {}
+}
+```
+
+### Blocks
+
+Top-level documents can omit the curly braces around a root record.  We call
+the content of a record sans curly braces a _block_.  When a block contains
+only a single item, the value of the block reduces to just the value of the
+element it contains.  The example block below is equivalent to the example
+record above.
 
 ```recon
 subject: "Re: Greetings"
 "Hi Martians!"
 ```
 
+### Markup
+
 Square brackets denote _markup_.  Markup is an inverted syntax for records,
-with values embedded in text instead of strings embedded in records.
+with values embedded in text, instead of text embedded in records.
 
 ```recon
 [Hello, @em[world]!]
 ```
 
-Markup is just an alternative encoding for records.  The above example is
-exactly equivalent to the below example.
+Markup really is just an alternative encoding for records.  The above example
+is exactly equivalent to the below example.
 
 ```recon
 { "Hello, "; @em "world"; "!" }
 ```
 
+### Attributes
+
 The @ sign introduces an attribute.  Attributes are syntactic sugar for
-pulling key fields out in front of a record.  The example further reduces
-to the form below.
+pulling key fields out in front of a record.  The previous markup example
+further reduces to the form below.
 
 ```recon
 {
@@ -97,7 +137,7 @@ The above attributes desugar to:
 {event:"onClick"}
 ```
 
-Attribute parentheses specify a block, so they can contain named fields.
+Attribute parentheses enclose a block, allowing them to contain keyed slots.
 An example, with its desugared equivalent, follows.
 
 ```recon
@@ -115,7 +155,8 @@ An example, with its desugared equivalent, follows.
 ```
 
 When an attribute precedes a value, the value gets appended to the record
-holding the attribute fields, like so:
+holding the attribute fields.  The first unkeyed item in a record is known as
+the record's _target_.
 
 ```recon
 @a(href:"example.com")[Some examples...]
@@ -126,7 +167,7 @@ holding the attribute fields, like so:
 }
 ```
 
-Attributed records are concatenated to preceding attributes
+Attributed records are concatenated to their preceding attributes.
 
 ```recon
 @agent("007") @license("to-kill") {
@@ -150,18 +191,17 @@ Attributed records are concatenated to preceding attributes
 To a first approximation, the RECON data model has the following structure:
 
 ```scala
-sealed abstract class Item                                // |-- Item
-sealed abstract class Field extends Item                  // |   |-- Field
-case class Attr(name: String, value: Value) extends Field // |   |   |-- Attr
-case class Slot(name: String, value: Value) extends Field // |   |   |-- Slot
-sealed abstract class Value extends Item                  // |   |-- Value
-case class Record(items: Item*) extends Value             // |   |   |-- Record
-case class Text(toString: String) extends Value           // |   |   |-- Text
-case class Data(toArray: Array[Byte]) extends Value       // |   |   |-- Data
-case class Number(toDouble: Double) extends Value         // |   |   |-- Number
-case class Bool(toBoolean: Boolean) extends Value         // |   |   |-- Bool
-case object Extant extends Value                          // |   |   |-- Extant
-case object Absent extends Value                          // |   |   |-- Absent
+sealed abstract class Item                              // |-- Item
+sealed abstract class Field extends Item                // |   |-- Field
+case class Attr(key: Text, value: Value) extends Field  // |   |   |-- Attr
+case class Slot(key: Value, value: Value) extends Field // |   |   |-- Slot
+sealed abstract class Value extends Item                // |   |-- Value
+case class Record(items: Item*) extends Value           // |   |   |-- Record
+case class Text(toString: String) extends Value         // |   |   |-- Text
+case class Number(toDouble: Double) extends Value       // |   |   |-- Number
+case class Data(toArray: Array[Byte]) extends Value     // |   |   |-- Data
+case object Extant extends Value                        // |   |   |-- Extant
+case object Absent extends Value                        // |   |   |-- Absent
 ```
 
 ## Scala Library
@@ -244,6 +284,27 @@ scala> list.asRecord.map {
 res0: recon.Record = Record(Attr("ul"), Record(Attr("li"), Text("a")), Record(Attr("li"), Text("b")), Record(Attr("li"), Text("c")))
 ```
 
+The `Mold` typeclass projects RECON values to Scala values, and vice versa.
+The pattern of projecting weakly typed structural values to strongly typed
+data models allows the RECON language to serve as an expressive and malleable
+syntax for domain specific data formats.  `cast` and `coerce` methods project
+RECON items to Scala values using molds.
+
+```scala
+scala> import recon._; import basis.collections._
+import recon._
+import basis.collections._
+
+scala> recon"""{ 1, @prime 2, "3" }""".coerce[Array[Int]]
+res0: Array[Int] = Array(1, 2, 3)
+
+scala> recon"""@alpha { a: 1, b: 2 }""".coerce[Map[String, Int]]
+res1: basis.collections.Map[String,Int] = HashTrieMap("a" -> 1, "b" -> 2)
+
+scala> Recon(Seq(0.5, 0.25))
+res2: recon.Recon.Value = Record(Number(0.5), Number(0.25))
+```
+
 ## Language Grammar
 
 ```
@@ -272,15 +333,13 @@ CharEscape ::= '\\' ('"' | '\\' | '/' | '@' | '{' | '}' | '[' | ']' | 'b' | 'f' 
 
 Base64Char ::= [A-Za-z0-9+/]
 
-Block ::= WS* (Slot | BlockValue) SP* ((',' | ';' | NL) Block)? WS*
+Block ::= WS* Slot SP* ((',' | ';' | NL) Block)? WS*
 
-Name ::= NameStartChar NameChar*
+Attr ::= '@' Ident ('(' WS* Block WS* ')')?
 
-Attr ::= '@' Name ('(' WS* Block WS* ')')?
+Slot ::= BlockValue (SP* ':' SP* BlockValue)?
 
-Slot ::= Name SP* ':' SP* BlockValue
-
-BlockValue ::= ((Attr SP* BlockValue) | Record | Markup | String | Data | Number | Token)?
+BlockValue ::= ((Attr SP* BlockValue) | Record | Markup | Ident | String | Number | Data)?
 
 InlineValue ::= ((Attr SP* InlineValue) | Record | Markup)?
 
@@ -294,5 +353,5 @@ Data ::= '%' (Base64Char{4})* (Base64Char Base64Char ((Base64Char '=') | ('=' '=
 
 Number ::= '-'? (([1-9] [0-9]*) | [0-9]) ('.' [0-9]+)? (('E' | 'e') ('+' | '-')? [0-9]+)?
 
-Token ::= '#' ("true" | "false")
+Ident ::= NameStartChar NameChar*
 ```

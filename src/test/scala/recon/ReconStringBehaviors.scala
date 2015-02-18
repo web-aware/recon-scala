@@ -108,8 +108,8 @@ trait ReconStringBehaviors extends Matchers { this: FlatSpec =>
     }
 
     it should "interpolate booleans" in {
-      recon"#true"  should equal (True)
-      recon"#false" should equal (False)
+      recon"true"  should equal (True)
+      recon"false" should equal (False)
     }
 
     it should "interpolate single values with trailing commas" in {
@@ -208,8 +208,8 @@ trait ReconStringBehaviors extends Matchers { this: FlatSpec =>
         %AA==
         integer: 0
         decimal: 0.0
-        #true
-        #false
+        true
+        false
       """ should equal (Record(
         Slot("record", Record.empty),
         Slot("markup", Text.empty),
@@ -230,8 +230,8 @@ trait ReconStringBehaviors extends Matchers { this: FlatSpec =>
         %AA==
         integer: 0
         decimal: 0.0
-        #true
-        #false
+        true
+        false
       } """ should equal (Record(
         Slot("record", Record.empty),
         Slot("markup", Text.empty),
@@ -257,26 +257,26 @@ trait ReconStringBehaviors extends Matchers { this: FlatSpec =>
       recon"""@hello([world])""" should equal (Record(Attr("hello", Text("world"))))
       recon"""@hello("world")""" should equal (Record(Attr("hello", Text("world"))))
       recon"""@hello(42)"""      should equal (Record(Attr("hello", Number(42))))
-      recon"""@hello(#true)"""   should equal (Record(Attr("hello", True)))
-      recon"""@hello(#false)"""  should equal (Record(Attr("hello", False)))
+      recon"""@hello(true)"""   should equal (Record(Attr("hello", True)))
+      recon"""@hello(false)"""  should equal (Record(Attr("hello", False)))
     }
 
     it should "interpolate single extant attributes with multiple parameters" in {
-      recon"""@hello("world", %AA==, 42, #true)""" should equal (
+      recon"""@hello("world", %AA==, 42, true)""" should equal (
         Record(Attr("hello", Record(Text("world"), Data("AA=="), Number(42), True))))
-      recon"""@hello("world"; %AA==; 42; #true)""" should equal (
+      recon"""@hello("world"; %AA==; 42; true)""" should equal (
         Record(Attr("hello", Record(Text("world"), Data("AA=="), Number(42), True))))
       recon"""@hello("world"
                      %AA==
                      42
-                     #true)""" should equal (
+                     true)""" should equal (
         Record(Attr("hello", Record(Text("world"), Data("AA=="), Number(42), True))))
     }
 
     it should "interpolate single extant attributes with named parameters" in {
       recon"""@hello(name: "world")""" should equal (
         Record(Attr("hello", Record(Slot("name", Text("world"))))))
-      recon"""@hello(name: "world", data: %AA==, number: 42, #false)""" should equal (
+      recon"""@hello(name: "world", data: %AA==, number: 42, false)""" should equal (
         Record(
           Attr(
             "hello",
@@ -298,11 +298,11 @@ trait ReconStringBehaviors extends Matchers { this: FlatSpec =>
     it should "interpolate multiple extant attributes with single parameters" in {
       recon"""@a({}) @b([])""" should equal (Record(Attr("a", Record.empty), Attr("b", Text.empty)))
       recon"""@a("test") @b(42)""" should equal (Record(Attr("a", Text("test")), Attr("b", Number(42))))
-      recon"""@a(#true) @b(#false)""" should equal (Record(Attr("a", True), Attr("b", False)))
+      recon"""@a(true) @b(false)""" should equal (Record(Attr("a", True), Attr("b", False)))
     }
 
     it should "interpolate multiple extant attributes with complex parameters" in {
-      recon"""@hello("world", 42) @test(name: "interpolate", pending: #false)""" should equal(
+      recon"""@hello("world", 42) @test(name: "interpolate", pending: false)""" should equal(
         Record(
           Attr("hello", Record(Text("world"), Number(42))),
           Attr("test", Record(Slot("name", Text("interpolate")), Slot("pending", False)))))
@@ -319,7 +319,7 @@ trait ReconStringBehaviors extends Matchers { this: FlatSpec =>
     it should "interpolate attributed nonempty records" in {
       recon"""@hello { {}, [] }"""   should equal (Record(Attr("hello"), Record.empty, Text.empty))
       recon"""@hello() { "world", 42 }""" should equal (Record(Attr("hello"), Text("world"), Number(42)))
-      recon"""@hello(name: "world") { number: 42, #true }""" should equal(
+      recon"""@hello(name: "world") { number: 42, true }""" should equal(
         Record(Attr("hello", Record(Slot("name", Text("world")))), Slot("number", Number(42)), True))
     }
 
@@ -372,10 +372,10 @@ trait ReconStringBehaviors extends Matchers { this: FlatSpec =>
     }
 
     it should "interpolate attributed booleans" in {
-      recon"""@hello #true"""   should equal (Record(Attr("hello"), True))
-      recon"""@hello() #false""" should equal (Record(Attr("hello"), False))
-      recon"""@hello("world") #true""" should equal (Record(Attr("hello", Text("world")), True))
-      recon"""@hello(name: "world") #false""" should equal(
+      recon"""@hello true"""   should equal (Record(Attr("hello"), True))
+      recon"""@hello() false""" should equal (Record(Attr("hello"), False))
+      recon"""@hello("world") true""" should equal (Record(Attr("hello", Text("world")), True))
+      recon"""@hello(name: "world") false""" should equal(
         Record(Attr("hello", Record(Slot("name", Text("world")))), False))
     }
 
@@ -396,8 +396,8 @@ trait ReconStringBehaviors extends Matchers { this: FlatSpec =>
       recon"""[A: {"answer"}.]""" should equal (Record(Text("A: "), Text("answer"), Text(".")))
       recon"""[A: {%AA==}.]""" should equal (Record(Text("A: "), Data("AA=="), Text(".")))
       recon"""[A: {42}.]""" should equal (Record(Text("A: "), Number(42), Text(".")))
-      recon"""[A: {#true}.]""" should equal (Record(Text("A: "), True, Text(".")))
-      recon"""[A: {#false}.]""" should equal (Record(Text("A: "), False, Text(".")))
+      recon"""[A: {true}.]""" should equal (Record(Text("A: "), True, Text(".")))
+      recon"""[A: {false}.]""" should equal (Record(Text("A: "), False, Text(".")))
       recon"""[A: {answer:0.0}.]""" should equal (Record(Text("A: "), Slot("answer", Number(0.0)), Text(".")))
     }
 
@@ -406,7 +406,7 @@ trait ReconStringBehaviors extends Matchers { this: FlatSpec =>
       recon"""[A: @answer().]""" should equal (Record(Text("A: "), Record(Attr("answer")), Text(".")))
       recon"""[A: @answer("secret").]""" should equal (
         Record(Text("A: "), Record(Attr("answer", Text("secret"))), Text(".")))
-      recon"""[A: @answer(number: 42, #true).]""" should equal (
+      recon"""[A: @answer(number: 42, true).]""" should equal (
         Record(Text("A: "), Record(Attr("answer", Record(Slot("number", Number(42)), True))), Text(".")))
     }
 
@@ -433,7 +433,7 @@ trait ReconStringBehaviors extends Matchers { this: FlatSpec =>
         Record(Text("A: "), Record(Attr("answer"), Number(42)), Text(".")))
       recon"""[A: @answer("secret") {42}.]""" should equal (
         Record(Text("A: "), Record(Attr("answer", Text("secret")), Number(42)), Text(".")))
-      recon"""[A: @answer(number: 42, "secret") {#true}.]""" should equal (
+      recon"""[A: @answer(number: 42, "secret") {true}.]""" should equal (
         Record(
           Text("A: "),
           Record(
@@ -449,7 +449,7 @@ trait ReconStringBehaviors extends Matchers { this: FlatSpec =>
     it should "substitute top-level record variables" in {
       val x = recon"{}"
       recon"$x" should equal (x)
-      val y = recon"{a:1,b:#true}"
+      val y = recon"{a:1,b:true}"
       recon"$y" should equal (y)
     }
 
@@ -482,9 +482,9 @@ trait ReconStringBehaviors extends Matchers { this: FlatSpec =>
     }
 
     it should "substitute top-level boolean variables" in {
-      val x = recon"#true"
+      val x = recon"true"
       recon"$x" should equal (x)
-      val y = recon"#false"
+      val y = recon"false"
       recon"$y" should equal (y)
     }
 
@@ -524,12 +524,12 @@ trait ReconStringBehaviors extends Matchers { this: FlatSpec =>
       val x = Text("world")
       recon"@span($x)" should equal (Record(Attr("span", x)))
       recon"@span(class:$x)" should equal (Record(Attr("span", Record(Slot("class", x)))))
-      recon"@span(#true,$x)" should equal (Record(Attr("span", Record(True, x))))
-      recon"@span($x,#false)" should equal (Record(Attr("span", Record(x, False))))
-      recon"@span(#true,$x,#false)" should equal (Record(Attr("span", Record(True, x, False))))
-      recon"@span(#true,class:$x)" should equal (Record(Attr("span", Record(True, Slot("class", x)))))
-      recon"@span(class:$x,#false)" should equal (Record(Attr("span", Record(Slot("class", x), False))))
-      recon"@span(#true,class:$x,#false)" should equal (
+      recon"@span(true,$x)" should equal (Record(Attr("span", Record(True, x))))
+      recon"@span($x,false)" should equal (Record(Attr("span", Record(x, False))))
+      recon"@span(true,$x,false)" should equal (Record(Attr("span", Record(True, x, False))))
+      recon"@span(true,class:$x)" should equal (Record(Attr("span", Record(True, Slot("class", x)))))
+      recon"@span(class:$x,false)" should equal (Record(Attr("span", Record(Slot("class", x), False))))
+      recon"@span(true,class:$x,false)" should equal (
         Record(Attr("span", Record(True, Slot("class", x), False))))
     }
 

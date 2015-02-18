@@ -49,8 +49,8 @@ object Mold {
   implicit def Container[CC[X] <: Container[X], A](implicit CC: CollectionFactory[CC], A: Mold[A]): Mold[CC[A]] =
     new ContainerMold[CC, A]()(CC, A)
 
-  implicit def Map[CC[X, Y] <: Map[X, Y], T](implicit CC: MapFactory[CC], T: Mold[T]): Mold[CC[String, T]] =
-    new MapMold[CC, T]()(CC, T)
+  implicit def Map[CC[X, Y] <: Map[X, Y], A, T](implicit CC: MapFactory[CC], A: Mold[A], T: Mold[T]): Mold[CC[A, T]] =
+    new MapMold[CC, A, T]()(CC, A, T)
 
   protected[recon] final val Specialized =
     new Specializable.Group((scala.Int, scala.Long, scala.Float, scala.Double))
@@ -64,6 +64,7 @@ private[recon] final class ByteMold(override val unit: Byte) extends Mold[Byte] 
     else if (value.isText)
       try Bind(recon.Number(value.asText.toUString.toString).toByte)
       catch { case _: NumberFormatException => Trap }
+    else if (value.isRecord) cast(recon)(value.target)
     else Trap
 
   override def norm(recon: Recon)(value: recon.Value): recon.Value =
@@ -88,6 +89,7 @@ private[recon] final class ShortMold(override val unit: Short) extends Mold[Shor
     else if (value.isText)
       try Bind(recon.Number(value.asText.toUString.toString).toShort)
       catch { case _: NumberFormatException => Trap }
+    else if (value.isRecord) cast(recon)(value.target)
     else Trap
 
   override def norm(recon: Recon)(value: recon.Value): recon.Value =
@@ -112,6 +114,7 @@ private[recon] final class IntMold(override val unit: Int) extends Mold[Int] {
     else if (value.isText)
       try Bind(recon.Number(value.asText.toUString.toString).toInt)
       catch { case _: NumberFormatException => Trap }
+    else if (value.isRecord) cast(recon)(value.target)
     else Trap
 
   override def norm(recon: Recon)(value: recon.Value): recon.Value =
@@ -136,6 +139,7 @@ private[recon] final class LongMold(override val unit: Long) extends Mold[Long] 
     else if (value.isText)
       try Bind(recon.Number(value.asText.toUString.toString).toLong)
       catch { case _: NumberFormatException => Trap }
+    else if (value.isRecord) cast(recon)(value.target)
     else Trap
 
   override def norm(recon: Recon)(value: recon.Value): recon.Value =
@@ -160,6 +164,7 @@ private[recon] final class FloatMold(override val unit: Float) extends Mold[Floa
     else if (value.isText)
       try Bind(recon.Number(value.asText.toUString.toString).toFloat)
       catch { case _: NumberFormatException => Trap }
+    else if (value.isRecord) cast(recon)(value.target)
     else Trap
 
   override def norm(recon: Recon)(value: recon.Value): recon.Value =
@@ -184,6 +189,7 @@ private[recon] final class DoubleMold(override val unit: Double) extends Mold[Do
     else if (value.isText)
       try Bind(recon.Number(value.asText.toUString.toString).toDouble)
       catch { case _: NumberFormatException => Trap }
+    else if (value.isRecord) cast(recon)(value.target)
     else Trap
 
   override def norm(recon: Recon)(value: recon.Value): recon.Value =
@@ -201,26 +207,17 @@ private[recon] final class DoubleMold(override val unit: Double) extends Mold[Do
 }
 
 private[recon] final class BooleanMold(override val unit: Boolean) extends Mold[Boolean] {
-  override def form(recon: Recon)(value: Boolean): recon.Value = recon.Bool(value)
+  override def form(recon: Recon)(value: Boolean): recon.Value =
+    if (value) recon.True else recon.False
 
   override def cast(recon: Recon)(value: recon.Value): Maybe[Boolean] =
-    if (value.isBool) Bind(value.asBool.toBoolean)
-    else if (value.isText) value.asText.toUString.toString match {
+    if (value.isText) value.asText.toUString.toString match {
       case "true" => basis.True
       case "false" => basis.False
       case _ => Trap
     }
+    else if (value.isRecord) cast(recon)(value.target)
     else Trap
-
-  override def norm(recon: Recon)(value: recon.Value): recon.Value = {
-    if (value.isBool) value
-    else if (value.isText) value.asText.toUString.toString match {
-      case "true" => recon.True
-      case "false" => recon.False
-      case _ => value
-    }
-    else value
-  }
 
   override def toString: String = {
     val s = String.Builder~"Mold"~'.'~"Boolean"
@@ -245,13 +242,12 @@ private[recon] final class StringMold(override val unit: String) extends Mold[St
   override def cast(recon: Recon)(value: recon.Value): Maybe[String] =
     if (value.isText) Bind(value.asText.toUString.toString)
     else if (value.isNumber) Bind(value.asNumber.toDecimalString)
-    else if (value.isBool) Bind(if (value.asBool.toBoolean) "true" else "false")
+    else if (value.isRecord) cast(recon)(value.target)
     else Trap
 
   override def norm(recon: Recon)(value: recon.Value): recon.Value =
     if (value.isText) value
     else if (value.isNumber) recon.Text(value.asNumber.toDecimalString)
-    else if (value.isBool) recon.Text(if (value.asBool.toBoolean) "true" else "false")
     else value
 
   override def toString: String = {
@@ -269,6 +265,7 @@ private[recon] final class DataMold[Data <: Loader](implicit Data: DataFactory[D
 
   override def cast(recon: Recon)(value: recon.Value): Maybe[Data] =
     if (value.isData) Bind(Data.from(value.asData))
+    else if (value.isRecord) cast(recon)(value.target)
     else Trap
 
   override def toString: String = (String.Builder~"Mold"~'.'~"Data"~'('~>Data~')').state
@@ -309,8 +306,8 @@ private[recon] final class ArrayMold[A](implicit A: Mold[A], ATag: ClassTag[A]) 
 
   override def norm(recon: Recon)(value: recon.Value): recon.Value =
     if (value.isRecord) value.asRecord.map { item =>
-      if (item.isAttr) recon.Attr(item.name, A.norm(recon)(item.value))
-      else if (item.isSlot) recon.Slot(item.name, A.norm(recon)(item.value))
+      if (item.isAttr) recon.Attr(item.asAttr.key, A.norm(recon)(item.value))
+      else if (item.isSlot) recon.Slot(item.key, A.norm(recon)(item.value))
       else A.norm(recon)(item.value)
     } (recon.RecordBuilder)
     else recon.Record.empty
@@ -335,8 +332,8 @@ private[recon] final class ContainerMold[CC[X] <: Container[X], A](
 
   override def norm(recon: Recon)(value: recon.Value): recon.Value =
     if (value.isRecord) value.asRecord.map { item =>
-      if (item.isAttr) recon.Attr(item.name, A.norm(recon)(item.value))
-      else if (item.isSlot) recon.Slot(item.name, A.norm(recon)(item.value))
+      if (item.isAttr) recon.Attr(item.asAttr.key, A.norm(recon)(item.value))
+      else if (item.isSlot) recon.Slot(item.key, A.norm(recon)(item.value))
       else A.norm(recon)(item.value)
     } (recon.RecordBuilder)
     else recon.Record.empty
@@ -344,28 +341,33 @@ private[recon] final class ContainerMold[CC[X] <: Container[X], A](
   override def toString: String = (String.Builder~"Mold"~'.'~"Container"~'('~>CC~", "~>A~')').state
 }
 
-private[recon] final class MapMold[CC[X, Y] <: Map[X, Y], T](
-    implicit CC: MapFactory[CC], T: Mold[T])
-  extends Mold[CC[String, T]] {
+private[recon] final class MapMold[CC[X, Y] <: Map[X, Y], A, T](
+    implicit CC: MapFactory[CC], A: Mold[A], T: Mold[T])
+  extends Mold[CC[A, T]] {
 
-  override def unit: CC[String, T] = CC.empty[String, T]
+  override def unit: CC[A, T] = CC.empty[A, T]
 
-  override def form(recon: Recon)(value: CC[String, T]): recon.Value =
-    value.map(field => recon.Slot(field._1, T.form(recon)(field._2)))(recon.RecordBuilder)
+  override def form(recon: Recon)(value: CC[A, T]): recon.Value =
+    value.map(field => recon.Slot(A.form(recon)(field._1), T.form(recon)(field._2)))(recon.RecordBuilder)
 
-  override def cast(recon: Recon)(value: recon.Value): Maybe[CC[String, T]] =
+  override def cast(recon: Recon)(value: recon.Value): Maybe[CC[A, T]] =
     if (value.isRecord) Bind(value.asRecord.flatMap { item =>
-      if (item.isField) T.cast(recon)(item.value).map(item.name -> _) else Trap
-    } (CC.Builder[String, T]))
+      if (item.isField) {
+        val maybeKey = A.cast(recon)(item.key)
+        val maybeValue = T.cast(recon)(item.value)
+        if (maybeKey.canBind && maybeValue.canBind) Bind(maybeKey.bind -> maybeValue.bind) else Trap
+      }
+      else Trap
+    } (CC.Builder[A, T]))
     else Trap
 
   override def norm(recon: Recon)(value: recon.Value): recon.Value =
     if (value.isRecord) value.asRecord.map { item =>
-      if (item.isAttr) recon.Attr(item.name, T.norm(recon)(item.value))
-      else if (item.isSlot) recon.Slot(item.name, T.norm(recon)(item.value))
+      if (item.isAttr) recon.Attr(item.asAttr.key, T.norm(recon)(item.value))
+      else if (item.isSlot) recon.Slot(A.norm(recon)(item.key), T.norm(recon)(item.value))
       else T.norm(recon)(item.value)
     } (recon.RecordBuilder)
     else recon.Record.empty
 
-  override def toString: String = (String.Builder~"Mold"~'.'~"Map"~'('~>CC~", "~>T~')').state
+  override def toString: String = (String.Builder~"Mold"~'.'~"Map"~'('~>CC~", "~>A~", "~>T~')').state
 }

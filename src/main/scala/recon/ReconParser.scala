@@ -5,42 +5,26 @@ import basis.collections._
 import basis.text._
 
 private[recon] trait ReconParser extends ReconFactory { ReconParser =>
-  lazy val DocumentParser: Iteratee[Int, Value] = new DocumentParser()
-
-  lazy val BlockParser: Iteratee[Int, Value] = new BlockParser()
-
-  lazy val ItemParser: Iteratee[Int, Item] = new ItemParser()
-
-  lazy val NameParser: Iteratee[Int, String] = new NameParser()
-
-  lazy val AttrParser: Iteratee[Int, Attr] = new AttrParser()
-
-  lazy val SlotParser: Iteratee[Int, Slot] = new SlotParser()
-
-  lazy val BlockValueParser: Iteratee[Int, Value] = new BlockValueParser()
-
+  lazy val DocumentParser: Iteratee[Int, Value]    = new DocumentParser()
+  lazy val BlockParser: Iteratee[Int, Value]       = new BlockParser()
+  lazy val AttrParser: Iteratee[Int, Attr]         = new AttrParser()
+  lazy val BlockValueParser: Iteratee[Int, Value]  = new BlockValueParser()
   lazy val InlineValueParser: Iteratee[Int, Value] = new InlineValueParser()
-
-  lazy val RecordParser: Iteratee[Int, Value] = new RecordParser()
-
-  lazy val MarkupParser: Iteratee[Int, Value] = new MarkupParser()
-
-  lazy val StringParser: Iteratee[Int, Text] = new StringParser()
-
-  lazy val DataParser: Iteratee[Int, Data] = new DataParser()
-
-  lazy val NumberParser: Iteratee[Int, Number] = new NumberParser()
-
-  lazy val TokenParser: Iteratee[Int, Value] = new TokenParser()
+  lazy val RecordParser: Iteratee[Int, Value]      = new RecordParser()
+  lazy val MarkupParser: Iteratee[Int, Value]      = new MarkupParser()
+  lazy val StringParser: Iteratee[Int, Text]       = new StringParser()
+  lazy val DataParser: Iteratee[Int, Data]         = new DataParser()
+  lazy val NumberParser: Iteratee[Int, Number]     = new NumberParser()
+  lazy val IdentParser: Iteratee[Int, Text]        = new IdentParser()
 
 
-  private def isSpace(c: Int): Boolean = c == 0x20 || c == 0x9
+  private[recon] def isSpace(c: Int): Boolean = c == 0x20 || c == 0x9
 
-  private def isNewline(c: Int): Boolean = c == 0xA || c == 0xD
+  private[recon] def isNewline(c: Int): Boolean = c == 0xA || c == 0xD
 
-  private def isWhitespace(c: Int): Boolean = isSpace(c) || isNewline(c)
+  private[recon] def isWhitespace(c: Int): Boolean = isSpace(c) || isNewline(c)
 
-  private def isNameStartChar(c: Int): Boolean =
+  private[recon] def isNameStartChar(c: Int): Boolean =
     c >= 'A' && c <= 'Z' ||
     c == '_' ||
     c >= 'a' && c <= 'z' ||
@@ -57,7 +41,7 @@ private[recon] trait ReconParser extends ReconFactory { ReconParser =>
     c >= 0xFDF0 && c <= 0xFFFD ||
     c >= 0x10000 && c <= 0xEFFFF
 
-  private def isNameChar(c: Int): Boolean =
+  private[recon] def isNameChar(c: Int): Boolean =
     c == '-' ||
     c >= '0' && c <= '9' ||
     c >= 'A' && c <= 'Z' ||
@@ -77,7 +61,7 @@ private[recon] trait ReconParser extends ReconFactory { ReconParser =>
     c >= 0xFDF0 && c <= 0xFFFD ||
     c >= 0x10000 && c <= 0xEFFFF
 
-  private def isBase64Char(c: Int): Boolean =
+  private[recon] def isBase64Char(c: Int): Boolean =
     c >= 'A' && c <= 'Z' ||
     c >= 'a' && c <= 'z' ||
     c >= '0' && c <= '9' ||
@@ -119,7 +103,7 @@ private[recon] trait ReconParser extends ReconFactory { ReconParser =>
 
   private final class BlockParser(
       builder: ItemBuilder with State[Value],
-      field: Iteratee[Int, Field],
+      key: Iteratee[Int, Value],
       value: Iteratee[Int, Value],
       s: Int)
     extends Parser[Value] {
@@ -130,42 +114,58 @@ private[recon] trait ReconParser extends ReconFactory { ReconParser =>
       var c = 0
       var s = this.s
       var value = this.value
-      var field = this.field
+      var key = this.key
       val builder = if (this.builder ne null) this.builder else ValueBuilder
       while (!input.isEmpty || input.isDone) {
         if (s == 1) {
           while (!input.isEmpty && { c = input.head; isWhitespace(c) }) input.step()
-          if (!input.isEmpty) {
-            if (isNameStartChar(c)) {
-              field = SlotParser
-              s = 2
-            }
-            else {
-              value = BlockValueParser
-              s = 3
-            }
-          }
+          if (!input.isEmpty) s = 2
           else if (input.isDone) return Iteratee.done(builder.state)
         }
         if (s == 2) {
-          while ((!input.isEmpty || input.isDone) && field.isCont) field = field.feed(input)
-          if (field.isDone) {
-            builder.appendField(field.bind)
-            field = null
-            s = 4
-          }
-          else if (field.isError) return field.asError
+          if (key eq null) key = BlockValueParser
+          while ((!input.isEmpty || input.isDone) && key.isCont) key = key.feed(input)
+          if (key.isDone) s = 3
+          else if (key.isError) return key.asError
         }
         if (s == 3) {
+          while (!input.isEmpty && { c = input.head; isSpace(c) }) input.step()
+          if (!input.isEmpty) {
+            if (c == ':') {
+              input.step()
+              s = 4
+            }
+            else {
+              builder.appendValue(key.bind)
+              key = null
+              s = 6
+            }
+          }
+          else if (input.isDone) {
+            builder.appendValue(key.bind)
+            return Iteratee.done(builder.state)
+          }
+        }
+        if (s == 4) {
+          while (!input.isEmpty && isSpace(input.head)) input.step()
+          if (!input.isEmpty) s = 5
+          else if (input.isDone) {
+            builder.appendField(Slot(key.bind))
+            return Iteratee.done(builder.state)
+          }
+        }
+        if (s == 5) {
+          if (value eq null) value = BlockValueParser
           while ((!input.isEmpty || input.isDone) && value.isCont) value = value.feed(input)
           if (value.isDone) {
-            builder.appendValue(value.bind)
+            builder.appendField(Slot(key.bind, value.bind))
+            key = null
             value = null
-            s = 4
+            s = 6
           }
           else if (value.isError) return value.asError
         }
-        if (s == 4) {
+        if (s == 6) {
           while (!input.isEmpty && { c = input.head; isSpace(c) }) input.step()
           if (!input.isEmpty) {
             if (c == ',' || c == ';' || isNewline(c)) {
@@ -177,36 +177,36 @@ private[recon] trait ReconParser extends ReconFactory { ReconParser =>
           else if (input.isDone) return Iteratee.done(builder.state)
         }
       }
-      new BlockParser(builder, field, value, s)
+      new BlockParser(builder, key, value, s)
     }
 
     override def interpolate(item: Value): Iteratee[Int, Value] = {
       var s = this.s
       if (s == 1) {
         val builder = if (this.builder ne null) this.builder else ValueBuilder
-        builder.appendValue(item)
-        s = 4
-        new BlockParser(builder, field, value, s)
+        val key = Iteratee.done(item)
+        s = 3
+        new BlockParser(builder, key, value, s)
       }
       else if (s == 2) {
-        var field = this.field.asInstanceOf[Parser[Field]].interpolate(item)
-        if (field.isError) return field.asError
-        if (field.isDone) {
-          builder.appendField(field.bind)
-          field = null
-          s = 4
-        }
-        new BlockParser(builder, field, value, s)
+        val key = this.key.asInstanceOf[Parser[Value]].interpolate(item)
+        if (key.isError) return key.asError
+        if (key.isDone) s = 3
+        new BlockParser(builder, key, value, s)
       }
-      else if (s == 3) {
-        var value = this.value.asInstanceOf[Parser[Value]].interpolate(item)
+      else if (s == 4) {
+        builder.appendField(Slot(key.bind, item))
+        s = 6
+        new BlockParser(builder, null, null, s)
+      }
+      else if (s == 5) {
+        val value = this.value.asInstanceOf[Parser[Value]].interpolate(item)
         if (value.isError) return value.asError
         if (value.isDone) {
-          builder.appendValue(value.bind)
-          value = null
-          s = 4
+          builder.appendField(Slot(key.bind, value.bind))
+          s = 6
         }
-        new BlockParser(builder, field, value, s)
+        new BlockParser(builder, null, null, s)
       }
       else super.interpolate(item)
     }
@@ -217,68 +217,19 @@ private[recon] trait ReconParser extends ReconFactory { ReconParser =>
   }
 
 
-  private final class ItemParser extends Parser[Item] {
-    override def feed(input: Iterator[Int]): Iteratee[Int, Item] = {
-      if (!input.isEmpty) {
-        val c = input.head
-        if (isNameStartChar(c)) SlotParser.feed(input)
-        else BlockValueParser.feed(input)
-      }
-      else this
-    }
-
-    override def toString: String = (String.Builder~ReconParser.toString~'.'~"ItemParser").state
-  }
-
-
-  private final class NameParser(
-      builder: StringBuilder with State[String],
-      s: Int)
-    extends Parser[String] {
-
-    def this() = this(null, 1)
-
-    override def feed(input: Iterator[Int]): Iteratee[Int, String] = {
-      var c = 0
-      var s = this.s
-      var builder = this.builder
-      if (s == 1) {
-        if (!input.isEmpty && { c = input.head; isNameStartChar(c) }) {
-          if (builder eq null) builder = String.Builder
-          input.step()
-          builder.append(c)
-          s = 2
-        }
-        else if (!input.isEmpty) return error(input, expected = "name", found = c)
-        else if (input.isDone) return unexpectedEOF
-      }
-      if (s == 2) {
-        while (!input.isEmpty && { c = input.head; isNameChar(c) }) {
-          input.step()
-          builder.append(c)
-        }
-        if (!input.isEmpty || input.isDone) return Iteratee.done(builder.state)
-      }
-      new NameParser(builder, s)
-    }
-
-    override def toString: String = (String.Builder~ReconParser.toString~'.'~"NameParser").state
-  }
-
-
   private final class AttrParser(
-      name: Iteratee[Int, String],
+      ident: Iteratee[Int, Text],
       value: Iteratee[Int, Value],
       s: Int)
     extends Parser[Attr] {
 
-    def this() = this(NameParser, BlockParser, 1)
+    def this() = this(IdentParser, BlockParser, 1)
 
     override def feed(input: Iterator[Int]): Iteratee[Int, Attr] = {
       var c = 0
       var s = this.s
       var value = this.value
-      var name = this.name
+      var ident = this.ident
       if (s == 1) {
         if (!input.isEmpty && { c = input.head; c == '@' }) {
           input.step()
@@ -288,23 +239,23 @@ private[recon] trait ReconParser extends ReconFactory { ReconParser =>
         else if (input.isDone) return unexpectedEOF
       }
       if (s == 2) {
-        name = name.feed(input)
-        if (name.isDone) s = 3
-        else if (name.isError) return name.asError
+        ident = ident.feed(input)
+        if (ident.isDone) s = 3
+        else if (ident.isError) return ident.asError
       }
       if (s == 3) {
         if (!input.isEmpty && input.head == '(') {
           input.step()
           s = 4
         }
-        else if (!input.isEmpty || input.isDone) return Iteratee.done(Attr(name.bind))
+        else if (!input.isEmpty || input.isDone) return Iteratee.done(Attr(ident.bind))
       }
       if (s == 4) {
         while (!input.isEmpty && { c = input.head; isWhitespace(c) }) input.step()
         if (!input.isEmpty) {
           if (c == ')') {
             input.step()
-            return Iteratee.done(Attr(name.bind))
+            return Iteratee.done(Attr(ident.bind))
           }
           else s = 5
         }
@@ -320,13 +271,13 @@ private[recon] trait ReconParser extends ReconFactory { ReconParser =>
         if (!input.isEmpty) {
           if (c == ')') {
             input.step()
-            return Iteratee.done(Attr(name.bind, value.bind))
+            return Iteratee.done(Attr(ident.bind, value.bind))
           }
           else return error(input, expected = ')', found = c)
         }
         else if (input.isDone) return unexpectedEOF
       }
-      new AttrParser(name, value, s)
+      new AttrParser(ident, value, s)
     }
 
     override def interpolate(item: Value): Iteratee[Int, Attr] = {
@@ -335,75 +286,15 @@ private[recon] trait ReconParser extends ReconFactory { ReconParser =>
         val value = this.value.asInstanceOf[Parser[Value]].interpolate(item)
         if (value.isError) return value.asError
         s = if (value.isDone) 6 else 5
-        new AttrParser(name, value, s)
+        new AttrParser(ident, value, s)
       }
       else super.interpolate(item)
     }
 
     override def state: Maybe[Attr] =
-      if (name.isDone) Bind(Attr(name.bind, value.state.bindOrElse(Extant))) else Trap
+      if (ident.isDone) Bind(Attr(ident.bind, value.state.bindOrElse(Extant))) else Trap
 
     override def toString: String = (String.Builder~ReconParser.toString~'.'~"AttrParser").state
-  }
-
-
-  private final class SlotParser(
-      name: Iteratee[Int, String],
-      value: Iteratee[Int, Value],
-      s: Int)
-    extends Parser[Slot] {
-
-    def this() = this(NameParser, BlockValueParser, 1)
-
-    override def feed(input: Iterator[Int]): Iteratee[Int, Slot] = {
-      var c = 0
-      var s = this.s
-      var value = this.value
-      var name = this.name
-      if (s == 1) {
-        name = name.feed(input)
-        if (name.isDone) s = 2
-        else if (name.isError) return name.asError
-      }
-      if (s == 2) {
-        while (!input.isEmpty && { c = input.head; isSpace(c) }) input.step()
-        if (!input.isEmpty) {
-          if (c == ':') {
-            input.step()
-            s = 3
-          }
-          else return error(input, expected = ':', found = c)
-        }
-        else if (input.isDone) return unexpectedEOF
-      }
-      if (s == 3) {
-        while (!input.isEmpty && isSpace(input.head)) input.step()
-        if (!input.isEmpty) s = 4
-        else if (input.isDone) return Iteratee.done(Slot(name.bind))
-      }
-      if (s == 4) {
-        while ((!input.isEmpty || input.isDone) && value.isCont) value = value.feed(input)
-        if (value.isDone) return Iteratee.done(Slot(name.bind, value.bind))
-        else if (value.isError) return value.asError
-      }
-      new SlotParser(name, value, s)
-    }
-
-    override def interpolate(item: Value): Iteratee[Int, Slot] = {
-      if (s == 3) Iteratee.done(Slot(name.bind, item))
-      else if (s == 4) {
-        val value = this.value.asInstanceOf[Parser[Value]].interpolate(item)
-        if (value.isDone) Iteratee.done(Slot(name.bind, value.bind))
-        else if (value.isError) value.asError
-        else new SlotParser(name, value, s)
-      }
-      else super.interpolate(item)
-    }
-
-    override def state: Maybe[Slot] =
-      if (name.isDone) Bind(Slot(name.bind, value.state.bindOrElse(Extant))) else Trap
-
-    override def toString: String = (String.Builder~ReconParser.toString~'.'~"SlotParser").state
   }
 
 
@@ -462,8 +353,8 @@ private[recon] trait ReconParser extends ReconFactory { ReconParser =>
               value = NumberParser
               s = 4
             }
-            else if (c == '#') {
-              value = TokenParser
+            else if (isNameStartChar(c)) {
+              value = IdentParser
               s = 4
             }
             else if (builder eq null) return Iteratee.done(Absent)
@@ -681,7 +572,7 @@ private[recon] trait ReconParser extends ReconFactory { ReconParser =>
 
   private final class RecordParser(
       builder: ItemBuilder with State[Value],
-      field: Iteratee[Int, Field],
+      key: Iteratee[Int, Value],
       value: Iteratee[Int, Value],
       s: Int)
     extends Parser[Value] {
@@ -694,20 +585,20 @@ private[recon] trait ReconParser extends ReconFactory { ReconParser =>
       var c = 0
       var s = this.s
       var value = this.value
-      var field = this.field
+      var key = this.key
       val builder = if (this.builder ne null) this.builder else RecordBuilder
-      while (!input.isEmpty || input.isDone) {
-        if (s == 1) {
-          if (!input.isEmpty) {
-            c = input.head
-            if (c == '{') {
-              input.step()
-              s = 2
-            }
-            else return error(input, expected = '{', found = c)
+      if (s == 1) {
+        if (!input.isEmpty) {
+          c = input.head
+          if (c == '{') {
+            input.step()
+            s = 2
           }
-          else if (input.isDone) return unexpectedEOF
+          else return error(input, expected = '{', found = c)
         }
+        else if (input.isDone) return unexpectedEOF
+      }
+      while (!input.isEmpty || input.isDone) {
         if (s == 2) {
           while (!input.isEmpty && { c = input.head; isWhitespace(c) }) input.step()
           if (!input.isEmpty) {
@@ -715,36 +606,54 @@ private[recon] trait ReconParser extends ReconFactory { ReconParser =>
               input.step()
               return Iteratee.done(builder.state)
             }
-            else if (isNameStartChar(c)) {
-              field = SlotParser
-              s = 3
-            }
-            else {
-              value = BlockValueParser
-              s = 4
-            }
+            else s = 3
           }
           else if (input.isDone) return unexpectedEOF
         }
         if (s == 3) {
-          while ((!input.isEmpty || input.isDone) && field.isCont) field = field.feed(input)
-          if (field.isDone) {
-            builder.appendField(field.bind)
-            field = null
-            s = 5
-          }
-          else if (field.isError) return field.asError
+          if (key eq null) key = BlockValueParser
+          while ((!input.isEmpty || input.isDone) && key.isCont) key = key.feed(input)
+          if (key.isDone) s = 4
+          else if (key.isError) return key.asError
         }
         if (s == 4) {
+          while (!input.isEmpty && { c = input.head; isSpace(c) }) input.step()
+          if (!input.isEmpty) {
+            if (c == ':') {
+              input.step()
+              s = 5
+            }
+            else {
+              builder.appendValue(key.bind)
+              key = null
+              s = 7
+            }
+          }
+          else if (input.isDone) {
+            builder.appendValue(key.bind)
+            return Iteratee.done(builder.state)
+          }
+        }
+        if (s == 5) {
+          while (!input.isEmpty && isSpace(input.head)) input.step()
+          if (!input.isEmpty) s = 6
+          else if (input.isDone) {
+            builder.appendField(Slot(key.bind))
+            return Iteratee.done(builder.state)
+          }
+        }
+        if (s == 6) {
+          if (value eq null) value = BlockValueParser
           while ((!input.isEmpty || input.isDone) && value.isCont) value = value.feed(input)
           if (value.isDone) {
-            builder.appendValue(value.bind)
+            builder.appendField(Slot(key.bind, value.bind))
+            key = null
             value = null
-            s = 5
+            s = 7
           }
           else if (value.isError) return value.asError
         }
-        if (s == 5) {
+        if (s == 7) {
           while (!input.isEmpty && { c = input.head; isSpace(c) }) input.step()
           if (!input.isEmpty) {
             if (c == ',' || c == ';' || isNewline(c)) {
@@ -755,40 +664,40 @@ private[recon] trait ReconParser extends ReconFactory { ReconParser =>
               input.step()
               return Iteratee.done(builder.state)
             }
-            else return error(input, expected = "'}', ';', ',', or newline", found = c)
+           else return error(input, expected = "'}', ';', ',', or newline", found = c)
           }
           else if (input.isDone) return unexpectedEOF
         }
       }
-      new RecordParser(builder, field, value, s)
+      new RecordParser(builder, key, value, s)
     }
 
     override def interpolate(item: Value): Iteratee[Int, Value] = {
       var s = this.s
       if (s == 2) {
-        builder.appendValue(item)
-        s = 5
-        new RecordParser(builder, field, value, s)
+        val key = Iteratee.done(item)
+        s = 4
+        new RecordParser(builder, key, value, s)
       }
       else if (s == 3) {
-        var field = this.field.asInstanceOf[Parser[Field]].interpolate(item)
-        if (field.isError) return field.asError
-        if (field.isDone) {
-          builder.appendField(field.bind)
-          field = null
-          s = 5
-        }
-        new RecordParser(builder, field, value, s)
+        val key = this.key.asInstanceOf[Parser[Value]].interpolate(item)
+        if (key.isError) return key.asError
+        if (key.isDone) s = 4
+        new RecordParser(builder, key, value, s)
       }
-      else if (s == 4) {
-        var value = this.value.asInstanceOf[Parser[Value]].interpolate(item)
+      else if (s == 5) {
+        builder.appendField(Slot(key.bind, item))
+        s = 7
+        new RecordParser(builder, null, null, s)
+      }
+      else if (s == 6) {
+        val value = this.value.asInstanceOf[Parser[Value]].interpolate(item)
         if (value.isError) return value.asError
         if (value.isDone) {
-          builder.appendValue(value.bind)
-          value = null
-          s = 5
+          builder.appendField(Slot(key.bind, value.bind))
+          s = 7
         }
-        new RecordParser(builder, field, value, s)
+        new RecordParser(builder, null, null, s)
       }
       else super.interpolate(item)
     }
@@ -1275,57 +1184,38 @@ private[recon] trait ReconParser extends ReconFactory { ReconParser =>
   }
 
 
-  private final class TokenParser(
-      builder: StringBuilder with State[String],
+  private final class IdentParser(
+      builder: StringBuilder with State[Text],
       s: Int)
-    extends Parser[Value] {
+    extends Parser[Text] {
 
     def this() = this(null, 1)
 
-    override def feed(input: Iterator[Int]): Iteratee[Int, Value] = {
+    override def feed(input: Iterator[Int]): Iteratee[Int, Text] = {
       var c = 0
       var s = this.s
       var builder = this.builder
       if (s == 1) {
-        if (!input.isEmpty && { c = input.head; c == '#' }) {
+        if (!input.isEmpty && { c = input.head; isNameStartChar(c) }) {
+          if (builder eq null) builder = TextBuilder
           input.step()
+          builder.append(c)
           s = 2
         }
-        else if (!input.isEmpty) return error(input, expected = '#', found = c)
+        else if (!input.isEmpty) return error(input, expected = "identitifer", found = c)
         else if (input.isDone) return unexpectedEOF
       }
       if (s == 2) {
-        if (!input.isEmpty && { c = input.head; isNameStartChar(c) }) {
-          if (builder eq null) builder = String.Builder
-          input.step()
-          builder.append(c)
-          s = 3
-        }
-        else if (!input.isEmpty) {
-          val message = (String.Builder~"expected #true or #false, but found #"~c).state
-          return Iteratee.error(new ReconException(message, input))
-        }
-        else if (input.isDone) return unexpectedEOF
-      }
-      if (s == 3) {
         while (!input.isEmpty && { c = input.head; isNameChar(c) }) {
           input.step()
           builder.append(c)
         }
-        if (!input.isEmpty || input.isDone) {
-          val token = builder.state
-          if (token == "true") return Iteratee.done(True)
-          else if (token == "false") return Iteratee.done(False)
-          else {
-            val message = (String.Builder~"expected #true or #false, but found #"~token).state
-            return Iteratee.error(new ReconException(message, input))
-          }
-        }
+        if (!input.isEmpty || input.isDone) return Iteratee.done(builder.state)
       }
-      new TokenParser(builder, s)
+      new IdentParser(builder, s)
     }
 
-    override def toString: String = (String.Builder~ReconParser.toString~'.'~"TokenParser").state
+    override def toString: String = (String.Builder~ReconParser.toString~'.'~"IdentParser").state
   }
 
 

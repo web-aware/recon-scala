@@ -19,7 +19,11 @@ trait ReconBehaviors extends Matchers { this: FlatSpec =>
     }
 
     it should "serialize non-empty text" in {
-      Text("test").toRecon should equal ("\"test\"")
+      Text("Hello, world!").toRecon should equal ("\"Hello, world!\"")
+    }
+
+    it should "serialize identifiers" in {
+      Text("test").toRecon should equal ("test")
     }
 
     it should "serialize empty data" in {
@@ -42,8 +46,8 @@ trait ReconBehaviors extends Matchers { this: FlatSpec =>
     }
 
     it should "serialize booleans" in {
-      True.toRecon should equal ("#true")
-      False.toRecon should equal ("#false")
+      True.toRecon should equal ("true")
+      False.toRecon should equal ("false")
     }
 
     it should "serialize extant attributes with no parameters" in {
@@ -54,12 +58,12 @@ trait ReconBehaviors extends Matchers { this: FlatSpec =>
       Record(Attr("answer", Record.empty)).toRecon should equal ("@answer({})")
       Record(Attr("answer", Text("42"))).toRecon should equal ("@answer(\"42\")")
       Record(Attr("answer", Number(42))).toRecon should equal ("@answer(42)")
-      Record(Attr("answer", True)).toRecon should equal ("@answer(#true)")
+      Record(Attr("answer", True)).toRecon should equal ("@answer(true)")
     }
 
     it should "serialize extant attributes with multiple parameters" in {
       val record = Record(Attr("answer", Record(Number(42), True)))
-      record.toRecon should equal ("@answer(42,#true)")
+      record.toRecon should equal ("@answer(42,true)")
     }
 
     it should "serialize extant attributes with named parameters" in {
@@ -69,12 +73,22 @@ trait ReconBehaviors extends Matchers { this: FlatSpec =>
 
     it should "serialize non-empty records" in {
       val record = Record(Number(1), Number(2), Text("3"), True)
-      record.toRecon should equal ("{1,2,\"3\",#true}")
+      record.toRecon should equal ("{1,2,\"3\",true}")
     }
 
-    it should "serialize records with slots" in {
+    it should "serialize records with ident-keyed slots" in {
       val record = Record(Slot("a", Number(1)), False, Slot("c", Number(3)))
-      record.toRecon should equal ("{a:1,#false,c:3}")
+      record.toRecon should equal ("{a:1,false,c:3}")
+    }
+
+    it should "serialize records with value-keyed slots" in {
+      val record = Record(Slot(Number(1), Text("one")), Slot(Record(Attr("id"), Text("foo")), Text("bar")))
+      record.toRecon should equal ("{1:one,@id\"foo\":bar}")
+    }
+
+    it should "serialize attributed records with a single slot" in {
+      val record = Record(Attr("hello"), Slot("subject", Text("world!")))
+      record.toRecon should equal ("@hello{subject:\"world!\"}")
     }
 
     it should "serialize markup" in {
@@ -85,7 +99,7 @@ trait ReconBehaviors extends Matchers { this: FlatSpec =>
           Text("Hello, "),
           Record(Attr("em", Record(Slot("class", Text("subject")))), Text("world")),
           Text("!"))
-      record2.toRecon should equal ("[Hello, @em(class:\"subject\")[world]!]")
+      record2.toRecon should equal ("[Hello, @em(class:subject)[world]!]")
     }
 
     it should "serialize markup in attribute parameters" in {

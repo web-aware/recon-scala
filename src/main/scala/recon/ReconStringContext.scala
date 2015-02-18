@@ -46,11 +46,13 @@ private[recon] class ReconStringContextMacros(val c: blackbox.Context { type Pre
     var input = null: LiteralIterator[c.type]
     while (literals.hasNext && parser.isCont) {
       input = new LiteralIterator(c, literals.next())
-      while (!input.isEmpty && parser.isCont) parser = parser.feed(input)
+      while (!input.isEmpty && parser.isCont)
+        parser = parser.feed(input)
       if (values.hasNext && parser.isCont)
         parser = parser.asInstanceOf[factory.Parser[Expr[R#Value]]].interpolate(values.next())
     }
-    if (!literals.hasNext && parser.isCont) parser = parser.feed(Iterator.done)
+    if (!literals.hasNext && parser.isCont)
+      parser = parser.feed(Iterator.done)
     if (parser.isDone) parser.bind
     else parser.trap match {
       case ex: ReconException => abort(input.pos, ex.getMessage)

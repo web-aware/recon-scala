@@ -13,7 +13,7 @@ package object recon {
   implicit def LongToNumber: Long => Number = Recon.LongToNumber
   implicit def FloatToNumber: Float => Number = Recon.FloatToNumber
   implicit def DoubleToNumber: Double => Number = Recon.DoubleToNumber
-  implicit def BooleanToBool: Boolean => Bool = Recon.BooleanToBool
+  implicit def BooleanToValue: Boolean => Value = Recon.BooleanToValue
 
   implicit def ReconStringContext(stringContext: StringContext): ReconStringContext[Recon.type] =
     macro ReconMacros.globalReconStringContext

@@ -19,7 +19,6 @@ trait Recon { Recon =>
   type Text <: ReconText with Value
   type Data <: ReconData with Value
   type Number <: ReconNumber with Value
-  type Bool <: ReconBool with Value
   type Extant <: ReconExtant with Value
   type Absent <: ReconAbsent with Value
 
@@ -32,10 +31,9 @@ trait Recon { Recon =>
   val Text: ReconTextFactory
   val Data: ReconDataFactory
   val Number: ReconNumberFactory
-  val Bool: ReconBoolFactory
 
-  def True: Bool
-  def False: Bool
+  def True: Value
+  def False: Value
   def Extant: Extant
   def Absent: Absent
 
@@ -48,7 +46,7 @@ trait Recon { Recon =>
   implicit lazy val LongToNumber: Long => Number = new LongToNumber()
   implicit lazy val FloatToNumber: Float => Number = new FloatToNumber()
   implicit lazy val DoubleToNumber: Double => Number = new DoubleToNumber()
-  implicit lazy val BooleanToBool: Boolean => Bool = new BooleanToBool()
+  implicit lazy val BooleanToValue: Boolean => Value = new BooleanToValue()
 
   implicit def ItemTag: ClassTag[Item]
   implicit def FieldTag: ClassTag[Field]
@@ -59,7 +57,6 @@ trait Recon { Recon =>
   implicit def TextTag: ClassTag[Text]
   implicit def DataTag: ClassTag[Data]
   implicit def NumberTag: ClassTag[Number]
-  implicit def BoolTag: ClassTag[Bool]
   implicit def ExtantTag: ClassTag[Extant]
   implicit def AbsentTag: ClassTag[Absent]
 
@@ -99,19 +96,17 @@ trait Recon { Recon =>
     def isNumber: Boolean = false
     def asNumber: Number = throw new MatchError("not a Number")
 
-    def isBool: Boolean = false
-    def asBool: Bool = throw new MatchError("not a Bool")
-
     def isExtant: Boolean = false
     def asExtant: Extant = throw new MatchError("not Extant")
 
     def isAbsent: Boolean = false
     def asAbsent: Absent = throw new MatchError("not Absent")
 
-    def name: String
+    def key: Value
     def value: Value
+    def target: Value = value
 
-    def / (name: String): Value
+    def / (key: Value): Value
 
     def cast[T](implicit mold: Mold[T]): Maybe[T]
 
@@ -131,7 +126,11 @@ trait Recon { Recon =>
       builder.state
     }
 
-    def toReconBlock: String = toRecon
+    def toReconBlock: String = {
+      val builder = String.Builder
+      writeReconBlock(builder)
+      builder.state
+    }
   }
 
   abstract class ReconItemFactory {
@@ -143,7 +142,7 @@ trait Recon { Recon =>
     override def isField: Boolean = true
     override def asField: Field = this
 
-    override def / (name: String): Value = value / name
+    override def / (key: Value): Value = value / key
 
     override def cast[T](implicit mold: Mold[T]): Maybe[T] =
       value.cast[T](mold)
@@ -155,7 +154,7 @@ trait Recon { Recon =>
   }
 
   abstract class ReconFieldFactory {
-    def unapply(field: Field): Maybe[(String, Value)] = Bind((field.name, field.value))
+    def unapply(field: Field): Maybe[(Value, Value)] = Bind((field.key, field.value))
 
     override def toString: String = (String.Builder~Recon.toString~'.'~"Field").state
   }
@@ -165,9 +164,11 @@ trait Recon { Recon =>
     override def isAttr: Boolean = true
     override def asAttr: Attr = this
 
+    override def key: Text
+
     override def writeRecon(builder: StringBuilder): Unit = {
       builder.append('@')
-      builder.append(name)
+      key.writeRecon(builder)
       if (!value.isExtant) {
         builder.append('(')
         value.writeReconBlock(builder)
@@ -177,33 +178,36 @@ trait Recon { Recon =>
 
     override def in(recon: Recon): recon.Attr =
       if (recon eq Recon) asInstanceOf[recon.Attr]
-      else recon.Attr(name, value in recon)
+      else recon.Attr(key in recon, value in recon)
 
     override def canEqual(other: Any): Boolean = other.isInstanceOf[ReconAttr]
 
     override def equals(other: Any): Boolean = other match {
       case that: ReconAttr =>
-        that.canEqual(this) && name.equals(that.name) && value.equals(that.value)
+        that.canEqual(this) && key.equals(that.key) && value.equals(that.value)
       case _ => false
     }
 
     override def hashCode: Int = {
       import MurmurHash3._
-      mash(mix(mix(seed[Attr], name.hashCode), value.hashCode))
+      mash(mix(mix(seed[Attr], key.hashCode), value.hashCode))
     }
 
     override def toString: String = {
-      val s = String.Builder~"Attr"~'('~>name
+      val s = String.Builder~"Attr"~'('~>key
       if (!value.isExtant) s~", "~>value
       (s~')').state
     }
   }
 
   abstract class ReconAttrFactory {
-    def apply(name: String, value: Value): Attr
-    def apply(name: String): Attr = apply(name, Extant)
+    def apply(key: Text, value: Value): Attr
+    def apply(key: Text): Attr = apply(key, Extant)
 
-    def unapply(attr: Attr): Maybe[(String, Value)] = Bind((attr.name, attr.value))
+    def apply(key: String, value: Value): Attr = apply(Text(key), value)
+    def apply(key: String): Attr = apply(Text(key))
+
+    def unapply(attr: Attr): Maybe[(Text, Value)] = Bind((attr.key, attr.value))
 
     override def toString: String = (String.Builder~Recon.toString~'.'~"Attr").state
   }
@@ -214,40 +218,43 @@ trait Recon { Recon =>
     override def asSlot: Slot = this
 
     override def writeRecon(builder: StringBuilder): Unit = {
-      builder.append(name)
+      key.writeRecon(builder)
       builder.append(':')
       if (!value.isExtant) value.writeRecon(builder)
     }
 
     override def in(recon: Recon): recon.Slot =
       if (recon eq Recon) asInstanceOf[recon.Slot]
-      else recon.Slot(name, value in recon)
+      else recon.Slot(key in recon, value in recon)
 
     override def canEqual(other: Any): Boolean = other.isInstanceOf[ReconSlot]
 
     override def equals(other: Any): Boolean = other match {
       case that: ReconSlot =>
-        that.canEqual(this) && name.equals(that.name) && value.equals(that.value)
+        that.canEqual(this) && key.equals(that.key) && value.equals(that.value)
       case _ => false
     }
 
     override def hashCode: Int = {
       import MurmurHash3._
-      mash(mix(mix(seed[Slot], name.hashCode), value.hashCode))
+      mash(mix(mix(seed[Slot], key.hashCode), value.hashCode))
     }
 
     override def toString: String = {
-      val s = String.Builder~"Slot"~'('~>name
+      val s = String.Builder~"Slot"~'('~>key
       if (!value.isExtant) s~", "~>value
       (s~')').state
     }
   }
 
   abstract class ReconSlotFactory {
-    def apply(name: String, value: Value): Slot
-    def apply(name: String): Slot = apply(name, Extant)
+    def apply(key: Value, value: Value): Slot
+    def apply(key: Value): Slot = apply(key, Extant)
 
-    def unapply(slot: Slot): Maybe[(String, Value)] = Bind((slot.name, slot.value))
+    def apply(key: String, value: Value): Slot = apply(Text(key), value)
+    def apply(key: String): Slot = apply(Text(key))
+
+    def unapply(slot: Slot): Maybe[(Value, Value)] = Bind((slot.key, slot.value))
 
     override def toString: String = (String.Builder~Recon.toString~'.'~"Slot").state
   }
@@ -257,10 +264,10 @@ trait Recon { Recon =>
     override def isValue: Boolean = true
     override def asValue: Value = this
 
-    override def name: String = ""
+    override def key: Value = Absent
     override def value: Value = this
 
-    override def / (name: String): Value = Absent
+    override def / (key: Value): Value = Absent
 
     override def cast[T](implicit mold: Mold[T]): Maybe[T] =
       mold.cast(Recon)(this)
@@ -332,9 +339,9 @@ trait Recon { Recon =>
     override def isRecord: Boolean = true
     override def asRecord: Record = this
 
-    def contains(name: String): Boolean
+    def contains(key: Value): Boolean
 
-    def apply(name: String): Value
+    def apply(key: Value): Value
 
     def head: Item
     def tail: Record
@@ -342,10 +349,20 @@ trait Recon { Recon =>
     def :+ (item: Item): Record
     def +: (item: Item): Record
     def + (item: Item): Record
-    def - (name: String): Record
+    def - (key: Value): Record
 
     def ++ (that: Record): Record
     def -- (that: Record): Record
+
+    override def target: Value = {
+      val items = iterator
+      while (!items.isEmpty) {
+        val item = items.head
+        if (item.isValue) return item.asValue
+        items.step()
+      }
+      Absent
+    }
 
     def hasAttrs: Boolean = this.exists(_.isAttr)
 
@@ -422,11 +439,13 @@ trait Recon { Recon =>
                 builder.append('}')
               }
             }
-            else {
-              if (item.isSlot) builder.append('{')
+            else if (item.isSlot) {
+              builder.append('{')
               item.writeRecon(builder, inMarkup = false)
-              if (item.isSlot) builder.append('}')
+              builder.append('}')
             }
+            else if (item.isText) item.asText.writeReconString(builder)
+            else item.writeRecon(builder, inMarkup = false)
           }
           else {
             builder.append('{')
@@ -451,7 +470,7 @@ trait Recon { Recon =>
 
     private def writeReconItem(item: Item, builder: StringBuilder): Unit = {
       if (item.isField) {
-        builder.append(item.name)
+        item.key.writeRecon(builder)
         builder.append(':')
         if (!item.value.isExtant) item.value.writeRecon(builder)
       }
@@ -533,40 +552,62 @@ trait Recon { Recon =>
     override def isText: Boolean = true
     override def asText: Text = this
 
-    def isBlank: Boolean = this.forall { c => c == 0x20 || c == 0x9 }
-
-    private[recon] override def writeRecon(builder: StringBuilder, inMarkup: Boolean): Unit = {
+    def isIdent: Boolean = {
       val cs = iterator
-      if (inMarkup) {
-        builder.append('[')
-        while (!cs.isEmpty) {
-          cs.head match {
-            case c @ ('\\' | '@' | '{' | '}' | '[' | ']') =>
-              builder.append('\\'); builder.append(c)
-            case c => builder.append(c)
-          }
-          cs.step()
-        }
-        builder.append(']')
-      }
-      else {
-        builder.append('"')
-        while (!cs.isEmpty) {
-          cs.head match {
-            case c @ ('"' | '\\' | '@' | '{' | '}' | '[' | ']') =>
-                         builder.append('\\'); builder.append(c)
-            case '\b' => builder.append('\\'); builder.append('b')
-            case '\f' => builder.append('\\'); builder.append('f')
-            case '\n' => builder.append('\\'); builder.append('n')
-            case '\r' => builder.append('\\'); builder.append('r')
-            case '\t' => builder.append('\\'); builder.append('t')
-            case c    => builder.append(c)
-          }
-          cs.step()
-        }
-        builder.append('"')
+      !cs.isEmpty && ReconParser.isNameStartChar(cs.head) && {
+        cs.step()
+        while (!cs.isEmpty && ReconParser.isNameChar(cs.head)) cs.step()
+        cs.isEmpty
       }
     }
+
+    def isBlank: Boolean = this.forall { c => c == 0x20 || c == 0x9 }
+
+    private[recon] def writeReconMarkup(builder: StringBuilder): Unit = {
+      val cs = iterator
+      builder.append('[')
+      while (!cs.isEmpty) {
+        cs.head match {
+          case c @ ('\\' | '@' | '{' | '}' | '[' | ']') =>
+            builder.append('\\'); builder.append(c)
+          case c => builder.append(c)
+        }
+        cs.step()
+      }
+      builder.append(']')
+    }
+
+    private[recon] def writeReconString(builder: StringBuilder): Unit = {
+      val cs = iterator
+      builder.append('"')
+      while (!cs.isEmpty) {
+        cs.head match {
+          case c @ ('"' | '\\' | '@' | '{' | '}' | '[' | ']') =>
+                       builder.append('\\'); builder.append(c)
+          case '\b' => builder.append('\\'); builder.append('b')
+          case '\f' => builder.append('\\'); builder.append('f')
+          case '\n' => builder.append('\\'); builder.append('n')
+          case '\r' => builder.append('\\'); builder.append('r')
+          case '\t' => builder.append('\\'); builder.append('t')
+          case c    => builder.append(c)
+        }
+        cs.step()
+      }
+      builder.append('"')
+    }
+
+    private[recon] def writeReconIdent(builder: StringBuilder): Unit = {
+      val cs = iterator
+      while (!cs.isEmpty) {
+        builder.append(cs.head)
+        cs.step()
+      }
+    }
+
+    private[recon] override def writeRecon(builder: StringBuilder, inMarkup: Boolean): Unit =
+      if (inMarkup) writeReconMarkup(builder)
+      else if (isIdent) writeReconIdent(builder)
+      else writeReconString(builder)
 
     override def writeRecon(builder: StringBuilder): Unit = writeRecon(builder, inMarkup = false)
 
@@ -780,43 +821,6 @@ trait Recon { Recon =>
   }
 
 
-  trait ReconBool extends Equals with ReconValue { this: Bool =>
-    override def isBool: Boolean = true
-    override def asBool: Bool = this
-
-    def toBoolean: Boolean
-
-    override def writeRecon(builder: StringBuilder): Unit =
-      builder.append(if (toBoolean) "#true" else "#false")
-
-    override def toRecon: String = if (toBoolean) "#true" else "#false"
-
-    override def in(recon: Recon): recon.Bool = recon.Bool(toBoolean)
-
-    override def canEqual(other: Any): Boolean = other.isInstanceOf[ReconBool]
-
-    override def equals(other: Any): Boolean = eq(other.asInstanceOf[AnyRef]) || (other match {
-      case that: ReconBool => that.canEqual(this) && toBoolean == that.toBoolean
-      case _ => false
-    })
-
-    override def hashCode: Int = {
-      import MurmurHash3._
-      mash(mix(seed[Bool], hash(toBoolean)))
-    }
-
-    override def toString: String = if (toBoolean) "True" else "False"
-  }
-
-  abstract class ReconBoolFactory {
-    def apply(value: Boolean): Bool = if (value) True else False
-
-    def unapply(bool: Bool): Maybe[Boolean] = Bind(bool.toBoolean)
-
-    override def toString: String = (String.Builder~Recon.toString~'.'~"Bool").state
-  }
-
-
   trait ReconExtant extends ReconValue { this: Extant =>
     override def isExtant: Boolean = true
     override def asExtant: Extant = this
@@ -872,8 +876,8 @@ trait Recon { Recon =>
     override def toString: String = (String.Builder~Recon.toString~'.'~"DoubleToNumber").state
   }
 
-  private final class BooleanToBool extends AbstractFunction1[Boolean, Bool] {
-    override def apply(value: Boolean): Bool = Bool(value)
+  private final class BooleanToValue extends AbstractFunction1[Boolean, Value] {
+    override def apply(value: Boolean): Value = if (value) True else False
     override def toString: String = (String.Builder~Recon.toString~'.'~"BooleanToBool").state
   }
 
@@ -888,15 +892,14 @@ trait Recon { Recon =>
     private[recon] override type Text = Recon.Text
     private[recon] override type Data = Recon.Data
     private[recon] override type Number = Recon.Number
-    private[recon] override type Bool = Recon.Bool
     private[recon] override type Extant = Recon.Extant
     private[recon] override type Absent = Recon.Absent
 
-    private[recon] override def Attr(name: String, value: Value): Attr = Recon.Attr(name, value)
-    private[recon] override def Attr(name: String): Attr = Recon.Attr(name)
+    private[recon] override def Attr(key: Text, value: Value): Attr = Recon.Attr(key, value)
+    private[recon] override def Attr(key: Text): Attr = Recon.Attr(key)
 
-    private[recon] override def Slot(name: String, value: Value): Slot = Recon.Slot(name, value)
-    private[recon] override def Slot(name: String): Slot = Recon.Slot(name)
+    private[recon] override def Slot(key: Value, value: Value): Slot = Recon.Slot(key, value)
+    private[recon] override def Slot(key: Value): Slot = Recon.Slot(key)
 
     private[recon] override def ValueBuilder: ItemBuilder with State[Value] = new ValueBuilder()
     private[recon] override def RecordBuilder: ItemBuilder with State[Record] = new RecordBuilder()
@@ -905,8 +908,8 @@ trait Recon { Recon =>
 
     private[recon] override def Number(value: String): Number = Recon.Number(value)
 
-    private[recon] override def True: Bool = Recon.True
-    private[recon] override def False: Bool = Recon.False
+    private[recon] override def True: Value = Recon.True
+    private[recon] override def False: Value = Recon.False
 
     private[recon] override def Extant: Extant = Recon.Extant
     private[recon] override def Absent: Absent = Recon.Absent
@@ -968,7 +971,6 @@ object Recon extends Recon {
   override type Text   = recon.Text
   override type Data   = recon.Data
   override type Number = recon.Number
-  override type Bool   = recon.Bool
   override type Extant = recon.Extant
   override type Absent = recon.Absent
 
@@ -981,9 +983,8 @@ object Recon extends Recon {
   override val Text   = recon.Text
   override val Data   = recon.Data
   override val Number = recon.Number
-  override val Bool   = recon.Bool
-  override val True   = recon.True
-  override val False  = recon.False
+  override val True   = new Text(new UString("true"))
+  override val False  = new Text(new UString("false"))
   override val Extant = recon.Extant
   override val Absent = recon.Absent
 
@@ -996,7 +997,6 @@ object Recon extends Recon {
   implicit override lazy val TextTag: ClassTag[Text] = ClassTag(Predef.classOf[Text])
   implicit override lazy val DataTag: ClassTag[Data] = ClassTag(Predef.classOf[Data])
   implicit override lazy val NumberTag: ClassTag[Number] = ClassTag(Predef.classOf[Number])
-  implicit override lazy val BoolTag: ClassTag[Bool] = ClassTag(Predef.classOf[Bool])
   implicit override lazy val ExtantTag: ClassTag[Extant] = ClassTag(Predef.classOf[Extant])
   implicit override lazy val AbsentTag: ClassTag[Absent] = ClassTag(Predef.classOf[Absent])
 
@@ -1015,22 +1015,22 @@ object Field extends Recon.ReconFieldFactory
 
 
 final class Attr(
-    override val name: String,
+    override val key: Text,
     override val value: Value)
   extends Field with Recon.ReconAttr
 
 object Attr extends Recon.ReconAttrFactory {
-  override def apply(name: String, value: Value): Attr = new Attr(name, value)
+  override def apply(key: Text, value: Value): Attr = new Attr(key, value)
 }
 
 
 final class Slot(
-    override val name: String,
+    override val key: Value,
     override val value: Value)
   extends Field with Recon.ReconSlot
 
 object Slot extends Recon.ReconSlotFactory {
-  override def apply(name: String, value: Value): Slot = new Slot(name, value)
+  override def apply(key: Value, value: Value): Slot = new Slot(key, value)
 }
 
 
@@ -1041,16 +1041,16 @@ object Value extends Recon.ReconValueFactory
 
 final class Record private[recon] (
     protected val self: FingerTrieSeq[Item],
-    private[this] var index: HashTrieMap[String, Value])
+    private[this] var index: HashTrieMap[Value, Value])
   extends Value with Recon.ReconRecord {
 
   private[recon] def this(self: FingerTrieSeq[Item]) = this(self, null)
 
-  private[this] def fields: HashTrieMap[String, Value] = {
+  private[this] def fields: HashTrieMap[Value, Value] = {
     if (index eq null) index = {
-      var index = HashTrieMap.empty[String, Value]
+      var index = HashTrieMap.empty[Value, Value]
       self.foreach { item =>
-        if (item.isField) index += (item.name, item.value)
+        if (item.isField) index += (item.key, item.value)
       }
       index
     }
@@ -1061,31 +1061,31 @@ final class Record private[recon] (
 
   override def length: Int = self.length
 
-  override def contains(name: String): Boolean =
-    if (length > 8) fields.contains(name)
-    else self.exists(_.name.equals(name))
+  override def contains(key: Value): Boolean =
+    if (length > 8) fields.contains(key)
+    else self.exists(_.key.equals(key))
 
   override def apply(index: Int): Item = self(index)
 
-  override def apply(name: String): Value =
-    if (length > 8) fields(name)
+  override def apply(key: Value): Value =
+    if (length > 8) fields(key)
     else {
       val these = self.iterator
       while (!these.isEmpty) {
         val item = these.head
-        if (item.name.equals(name)) return item.name
+        if (item.key.equals(key)) return item.key
         these.step()
       }
-      throw new NoSuchElementException(name)
+      throw new NoSuchElementException(key.toString)
     }
 
-  override def / (name: String): Value =
-    if (length > 8) { if (fields.contains(name)) fields(name) else Absent }
+  override def / (key: Value): Value =
+    if (length > 8) { if (fields.contains(key)) fields(key) else Absent }
     else {
       val these = self.iterator
       while (!these.isEmpty) {
         val item = these.head
-        if (item.name.equals(name)) return item.value
+        if (item.key.equals(key)) return item.value
         these.step()
       }
       Absent
@@ -1100,7 +1100,7 @@ final class Record private[recon] (
     new Record(
       self :+ item,
       if (index ne null) {
-        if (item.isField) index + (item.name, item.value)
+        if (item.isField) index + (item.key, item.value)
         else index
       }
       else null)
@@ -1109,7 +1109,7 @@ final class Record private[recon] (
     new Record(
       item +: self,
       if (index ne null) {
-        if (item.isField && !index.contains(item.name)) index + (item.name, item.value)
+        if (item.isField && !index.contains(item.key)) index + (item.key, item.value)
         else index
       }
       else null)
@@ -1117,31 +1117,31 @@ final class Record private[recon] (
   override def + (item: Item): Record =
     if (item.isValue)
       new Record(self :+ item, index)
-    else if ((index ne null) && !index.contains(item.name))
-      new Record(self :+ item, index + (item.name, item.value))
+    else if ((index ne null) && !index.contains(item.key))
+      new Record(self :+ item, index + (item.key, item.value))
     else {
       var i = length - 1
-      val name = item.name
-      while (i >= 0 && !self(i).name.equals(name)) i -= 1
+      val key = item.key
+      while (i >= 0 && !self(i).key.equals(key)) i -= 1
       if (i >= 0) {
         if (self(i).value.equals(item.value)) this
-        else new Record(self.update(i, item), if (index ne null) index + (name, item.value) else null)
+        else new Record(self.update(i, item), if (index ne null) index + (key, item.value) else null)
       }
       else new Record(self :+ item, index)
     }
 
-  override def - (name: String): Record =
-    if ((index ne null) && !index.contains(name)) this
+  override def - (key: Value): Record =
+    if ((index ne null) && !index.contains(key)) this
     else
       new Record(
-        self.filter(!_.name.equals(name))(FingerTrieSeq.Builder),
-        if (index ne null) index - name else null)
+        self.filter(!_.key.equals(key))(FingerTrieSeq.Builder),
+        if (index ne null) index - key else null)
 
   override def ++ (that: Record): Record =
     self.++(that.self)(Recon.RecordBuilder)
 
   override def -- (that: Record): Record =
-    self.filter(item => !that.contains(item.name))(Recon.RecordBuilder)
+    self.filter(item => !that.contains(item.key))(Recon.RecordBuilder)
 
   override def iterator: Iterator[Item] = self.iterator
 
@@ -1230,6 +1230,24 @@ object Data extends Recon.ReconDataFactory {
   override def Framer: Framer with State[Data] = new DataFramer(ArrayData.Framer)
 }
 
+
+sealed abstract class Number extends Value with Recon.ReconNumber
+
+private[recon] final class IntNumber(override val toInt: Int) extends Number with Recon.ReconInt
+
+private[recon] final class LongNumber(override val toLong: Long) extends Number with Recon.ReconLong
+
+private[recon] final class FloatNumber(override val toFloat: Float) extends Number with Recon.ReconFloat
+
+private[recon] final class DoubleNumber(override val toDouble: Double) extends Number with Recon.ReconDouble
+
+object Number extends Recon.ReconNumberFactory {
+  override def apply(value: Int): Number = new IntNumber(value)
+  override def apply(value: Long): Number = new LongNumber(value)
+  override def apply(value: Float): Number = new FloatNumber(value)
+  override def apply(value: Double): Number = new DoubleNumber(value)
+}
+
 private[recon] final class DataFramer(self: Framer with State[Loader]) extends Framer with State[Data] {
   override def endian: Endianness = self.endian
   override def isEOF: Boolean = self.isEOF
@@ -1245,37 +1263,6 @@ private[recon] final class DataFramer(self: Framer with State[Loader]) extends F
   override def state: Data = new Data(self.state)
   override def toString: String = (String.Builder~Recon.toString~'.'~"Data"~'.'~"Framer").state
 }
-
-
-sealed abstract class Number extends Value with Recon.ReconNumber
-
-private[recon] final class IntForm(override val toInt: Int) extends Number with Recon.ReconInt
-
-private[recon] final class LongForm(override val toLong: Long) extends Number with Recon.ReconLong
-
-private[recon] final class FloatForm(override val toFloat: Float) extends Number with Recon.ReconFloat
-
-private[recon] final class DoubleForm(override val toDouble: Double) extends Number with Recon.ReconDouble
-
-object Number extends Recon.ReconNumberFactory {
-  override def apply(value: Int): Number = new IntForm(value)
-  override def apply(value: Long): Number = new LongForm(value)
-  override def apply(value: Float): Number = new FloatForm(value)
-  override def apply(value: Double): Number = new DoubleForm(value)
-}
-
-
-sealed abstract class Bool extends Value with Recon.ReconBool
-
-object True extends Bool {
-  override def toBoolean: Boolean = true
-}
-
-object False extends Bool {
-  override def toBoolean: Boolean = false
-}
-
-object Bool extends Recon.ReconBoolFactory
 
 
 sealed abstract class Extant extends Value with Recon.ReconExtant

@@ -26,6 +26,10 @@ trait MoldBehaviors extends Matchers { this: FlatSpec =>
       recon"[2.5]".coerce[Byte] should equal (2.toByte)
     }
 
+    it should "cast attributed numbers to Byte values" in {
+      recon"@byte 42".coerce[Byte] should equal (42.toByte)
+    }
+
     it should "form numbers from Short values" in {
       recon(42.toShort) should equal (recon"42")
     }
@@ -42,6 +46,10 @@ trait MoldBehaviors extends Matchers { this: FlatSpec =>
       recon"[-1]".coerce[Short] should equal (-1.toShort)
       recon"[65537]".coerce[Short] should equal (1.toShort)
       recon"[2.5]".coerce[Short] should equal (2.toShort)
+    }
+
+    it should "cast attributed numbers to Short values" in {
+      recon"@short 42".coerce[Short] should equal (42.toShort)
     }
 
     it should "form numbers from Int values" in {
@@ -62,6 +70,10 @@ trait MoldBehaviors extends Matchers { this: FlatSpec =>
       recon"[2.5]".coerce[Int] should equal (2)
     }
 
+    it should "cast attributed numbers to Int values" in {
+      recon"@int 42".coerce[Int] should equal (42.toInt)
+    }
+
     it should "form numbers from Long values" in {
       recon(42L) should equal (recon"42")
     }
@@ -76,6 +88,10 @@ trait MoldBehaviors extends Matchers { this: FlatSpec =>
       recon"[42]".coerce[Long] should equal (42L)
       recon"[-1]".coerce[Long] should equal (-1L)
       recon"[2.5]".coerce[Long] should equal (2L)
+    }
+
+    it should "cast attributed numbers to Long values" in {
+      recon"@long 42".coerce[Long] should equal (42)
     }
 
     it should "form numbers from Float values" in {
@@ -94,6 +110,10 @@ trait MoldBehaviors extends Matchers { this: FlatSpec =>
       recon"[2.5]".coerce[Float] should equal (2.5F)
     }
 
+    it should "cast attributed numbers to Float values" in {
+      recon"@float 42".coerce[Float] should equal (42.0F)
+    }
+
     it should "form numbers from Double values" in {
       recon(2.5) should equal (recon"2.5")
     }
@@ -110,19 +130,23 @@ trait MoldBehaviors extends Matchers { this: FlatSpec =>
       recon"[2.5]".coerce[Double] should equal (2.5)
     }
 
-    it should "form bools from Boolean values" in {
-      recon(true) should equal (recon"#true")
-      recon(false) should equal (recon"#false")
+    it should "cast attributed numbers to Double values" in {
+      recon"@double 42".coerce[Double] should equal (42.0)
     }
 
-    it should "cast bools to Boolean values" in {
-      recon"#true".coerce[Boolean] should equal (true)
-      recon"#false".coerce[Boolean] should equal (false)
+    it should "form boolean identifiers from Boolean values" in {
+      recon(true) should equal (recon"true")
+      recon(false) should equal (recon"false")
     }
 
-    it should "cast boolean strings to Boolean values" in {
-      recon"[true]".coerce[Boolean] should equal (true)
-      recon"[false]".coerce[Boolean] should equal (false)
+    it should "cast boolean identifiers to Boolean values" in {
+      recon"true".coerce[Boolean] should equal (true)
+      recon"false".coerce[Boolean] should equal (false)
+    }
+
+    it should "cast attributed boolean identifiers to Boolean values" in {
+      recon"@bool true".coerce[Boolean] should equal (true)
+      recon"@bool false".coerce[Boolean] should equal (false)
     }
 
     it should "form text from String values" in {
@@ -141,14 +165,13 @@ trait MoldBehaviors extends Matchers { this: FlatSpec =>
       recon"2.5".coerce[String] should equal ("2.5")
     }
 
-    it should "cast bools to String values" in {
-      recon"#true".coerce[String] should equal ("true")
-      recon"#false".coerce[String] should equal ("false")
+    it should "cast attributed text to String values" in {
+      recon"@string [test]".coerce[String] should equal ("test")
     }
 
     it should "form records from arrays" in {
       recon(Array(1, 2, 3)) should equal (recon"{ 1, 2, 3 }")
-      recon(Array(true, false)) should equal (recon"{ #true, #false }")
+      recon(Array(true, false)) should equal (recon"{ true, false }")
     }
 
     it should "cast records to arrays" in {
