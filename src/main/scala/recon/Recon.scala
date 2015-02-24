@@ -41,11 +41,13 @@ trait Recon { Recon =>
   implicit def TextBuilder: StringBuilder with From[Text] with State[Text] = Text.Builder
   implicit def DataFramer: Framer with From[Data] with State[Data] = Data.Framer 
 
-  implicit lazy val StringToText: String => Text = new StringToText()
-  implicit lazy val IntToNumber: Int => Number = new IntToNumber()
-  implicit lazy val LongToNumber: Long => Number = new LongToNumber()
-  implicit lazy val FloatToNumber: Float => Number = new FloatToNumber()
-  implicit lazy val DoubleToNumber: Double => Number = new DoubleToNumber()
+  // Redundant `with Value` types needed to make implicit conversions work
+  // through path-dependent val imports.
+  implicit lazy val StringToText: String => Text with Value = new StringToText()
+  implicit lazy val IntToNumber: Int => Number with Value = new IntToNumber()
+  implicit lazy val LongToNumber: Long => Number with Value = new LongToNumber()
+  implicit lazy val FloatToNumber: Float => Number with Value = new FloatToNumber()
+  implicit lazy val DoubleToNumber: Double => Number with Value = new DoubleToNumber()
   implicit lazy val BooleanToValue: Boolean => Value = new BooleanToValue()
 
   implicit def ItemTag: ClassTag[Item]
@@ -107,8 +109,6 @@ trait Recon { Recon =>
     def target: Value = value
 
     def / (key: Value): Value
-
-    def / (key: String): Value = this / Text(key)
 
     def cast[T](implicit mold: Mold[T]): Maybe[T]
 
@@ -206,9 +206,6 @@ trait Recon { Recon =>
     def apply(key: Text, value: Value): Attr
     def apply(key: Text): Attr = apply(key, Extant)
 
-    def apply(key: String, value: Value): Attr = apply(Text(key), value)
-    def apply(key: String): Attr = apply(Text(key))
-
     def unapply(attr: Attr): Maybe[(Text, Value)] = Bind((attr.key, attr.value))
 
     override def toString: String = (String.Builder~Recon.toString~'.'~"Attr").state
@@ -252,9 +249,6 @@ trait Recon { Recon =>
   abstract class ReconSlotFactory {
     def apply(key: Value, value: Value): Slot
     def apply(key: Value): Slot = apply(key, Extant)
-
-    def apply(key: String, value: Value): Slot = apply(Text(key), value)
-    def apply(key: String): Slot = apply(Text(key))
 
     def unapply(slot: Slot): Maybe[(Value, Value)] = Bind((slot.key, slot.value))
 
