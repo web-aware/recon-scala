@@ -120,13 +120,13 @@ trait ReconStringBehaviors extends Matchers { this: FlatSpec =>
       recon"1;" should equal (Number(1))
     }
 
-    it should "interpolate multiple comma-separated items" in {
+    it should "interpolate multiple comma separated items" in {
       val xs = Record(Number(1), Number(2), Number(3), Number(4))
       recon"  1, 2,3 ,4  " should equal (xs)
       recon"{ 1, 2,3 ,4 }" should equal (xs)
     }
 
-    it should "interpolate multiple semicolon-separated items" in {
+    it should "interpolate multiple semicolon separated items" in {
       val xs = Record(Number(1), Number(2), Number(3), Number(4))
       recon"  1; 2;3 ;4  " should equal (xs)
       recon"{ 1; 2;3 ;4 }" should equal (xs)
@@ -144,7 +144,7 @@ trait ReconStringBehaviors extends Matchers { this: FlatSpec =>
       recon"{ 1; 2;3 ;4; }" should equal (xs)
     }
 
-    it should "interpolate multiple newline-separated items" in {
+    it should "interpolate multiple newline separated items" in {
       val xs = Record(Number(1), Number(2), Number(3))
       recon"""
         1
@@ -172,7 +172,7 @@ trait ReconStringBehaviors extends Matchers { this: FlatSpec =>
       } """ should equal (xs)
     }
 
-    it should "interpolate multiple command-newline-separated items" in {
+    it should "interpolate multiple comma-newline separated items" in {
       val xs = Record(Number(1), Number(2), Number(3))
       recon"""
         1,
@@ -186,7 +186,7 @@ trait ReconStringBehaviors extends Matchers { this: FlatSpec =>
       } """ should equal (xs)
     }
 
-    it should "interpolate multiple semicolon-newline-separated items" in {
+    it should "interpolate multiple semicolon-newline separated items" in {
       val xs = Record(Number(1), Number(2), Number(3))
       recon"""
         1;
@@ -257,8 +257,8 @@ trait ReconStringBehaviors extends Matchers { this: FlatSpec =>
       recon"""@hello([world])""" should equal (Record(Attr("hello", Text("world"))))
       recon"""@hello("world")""" should equal (Record(Attr("hello", Text("world"))))
       recon"""@hello(42)"""      should equal (Record(Attr("hello", Number(42))))
-      recon"""@hello(true)"""   should equal (Record(Attr("hello", True)))
-      recon"""@hello(false)"""  should equal (Record(Attr("hello", False)))
+      recon"""@hello(true)"""    should equal (Record(Attr("hello", True)))
+      recon"""@hello(false)"""   should equal (Record(Attr("hello", False)))
     }
 
     it should "interpolate single extant attributes with multiple parameters" in {
@@ -309,7 +309,7 @@ trait ReconStringBehaviors extends Matchers { this: FlatSpec =>
     }
 
     it should "interpolate attributed empty records" in {
-      recon"""@hello {}"""   should equal (Record(Attr("hello")))
+      recon"""@hello {}""" should equal (Record(Attr("hello")))
       recon"""@hello() {}""" should equal (Record(Attr("hello")))
       recon"""@hello("world") {}""" should equal (Record(Attr("hello", Text("world"))))
       recon"""@hello(name: "world") {}""" should equal(
@@ -317,14 +317,14 @@ trait ReconStringBehaviors extends Matchers { this: FlatSpec =>
     }
 
     it should "interpolate attributed nonempty records" in {
-      recon"""@hello { {}, [] }"""   should equal (Record(Attr("hello"), Record.empty, Text.empty))
+      recon"""@hello { {}, [] }""" should equal (Record(Attr("hello"), Record.empty, Text.empty))
       recon"""@hello() { "world", 42 }""" should equal (Record(Attr("hello"), Text("world"), Number(42)))
       recon"""@hello(name: "world") { number: 42, true }""" should equal(
         Record(Attr("hello", Record(Slot("name", Text("world")))), Slot("number", Number(42)), True))
     }
 
     it should "interpolate attributed empty markup" in {
-      recon"""@hello []"""   should equal (Record(Attr("hello")))
+      recon"""@hello []""" should equal (Record(Attr("hello")))
       recon"""@hello() []""" should equal (Record(Attr("hello")))
       recon"""@hello("world") []""" should equal (Record(Attr("hello", Text("world"))))
       recon"""@hello(name: "world") []""" should equal(
@@ -332,7 +332,7 @@ trait ReconStringBehaviors extends Matchers { this: FlatSpec =>
     }
 
     it should "interpolate attributed empty strings" in {
-      recon"""@hello "" """   should equal (Record(Attr("hello"), Text.empty))
+      recon"""@hello "" """ should equal (Record(Attr("hello"), Text.empty))
       recon"""@hello() "" """ should equal (Record(Attr("hello"), Text.empty))
       recon"""@hello("world") "" """ should equal (Record(Attr("hello", Text("world")), Text.empty))
       recon"""@hello(name: "world") "" """ should equal(
@@ -340,7 +340,7 @@ trait ReconStringBehaviors extends Matchers { this: FlatSpec =>
     }
 
     it should "interpolate attributed non-empty strings" in {
-      recon"""@hello "test" """   should equal (Record(Attr("hello"), Text("test")))
+      recon"""@hello "test" """ should equal (Record(Attr("hello"), Text("test")))
       recon"""@hello() "test" """ should equal (Record(Attr("hello"), Text("test")))
       recon"""@hello("world") "test" """ should equal (Record(Attr("hello", Text("world")), Text("test")))
       recon"""@hello(name: "world") "test" """ should equal(
@@ -348,7 +348,7 @@ trait ReconStringBehaviors extends Matchers { this: FlatSpec =>
     }
 
     it should "interpolate attributed empty data" in {
-      recon"""@hello % """   should equal (Record(Attr("hello"), Data.empty))
+      recon"""@hello % """ should equal (Record(Attr("hello"), Data.empty))
       recon"""@hello() % """ should equal (Record(Attr("hello"), Data.empty))
       recon"""@hello("world") % """ should equal (Record(Attr("hello", Text("world")), Data.empty))
       recon"""@hello(name: "world") % """ should equal(
@@ -356,7 +356,7 @@ trait ReconStringBehaviors extends Matchers { this: FlatSpec =>
     }
 
     it should "interpolate attributed non-empty data" in {
-      recon"""@hello %AA== """   should equal (Record(Attr("hello"), Data("AA==")))
+      recon"""@hello %AA== """ should equal (Record(Attr("hello"), Data("AA==")))
       recon"""@hello() %AAA= """ should equal (Record(Attr("hello"), Data("AAA=")))
       recon"""@hello("world") %AAAA """ should equal (Record(Attr("hello", Text("world")), Data("AAAA")))
       recon"""@hello(name: "world") %ABCDabcd12+/ """ should equal(
@@ -364,7 +364,7 @@ trait ReconStringBehaviors extends Matchers { this: FlatSpec =>
     }
 
     it should "interpolate attributed numbers" in {
-      recon"""@hello 42"""   should equal (Record(Attr("hello"), Number(42)))
+      recon"""@hello 42""" should equal (Record(Attr("hello"), Number(42)))
       recon"""@hello() -42""" should equal (Record(Attr("hello"), Number(-42)))
       recon"""@hello("world") 42.0""" should equal (Record(Attr("hello", Text("world")), Number(42.0)))
       recon"""@hello(name: "world") -42.0""" should equal(
@@ -372,7 +372,7 @@ trait ReconStringBehaviors extends Matchers { this: FlatSpec =>
     }
 
     it should "interpolate attributed booleans" in {
-      recon"""@hello true"""   should equal (Record(Attr("hello"), True))
+      recon"""@hello true""" should equal (Record(Attr("hello"), True))
       recon"""@hello() false""" should equal (Record(Attr("hello"), False))
       recon"""@hello("world") true""" should equal (Record(Attr("hello", Text("world")), True))
       recon"""@hello(name: "world") false""" should equal(

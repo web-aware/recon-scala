@@ -14,6 +14,10 @@ trait ReconBehaviors extends Matchers { this: FlatSpec =>
       Record.empty.toRecon should equal ("{}")
     }
 
+    it should "serialize non-empty records" in {
+      Record(Number(1), Number(2), Text("3"), True).toRecon should equal ("{1,2,\"3\",true}")
+    }
+
     it should "serialize empty text" in {
       Text.empty.toRecon should equal ("\"\"")
     }
@@ -71,22 +75,22 @@ trait ReconBehaviors extends Matchers { this: FlatSpec =>
       record.toRecon should equal ("@answer(number:42)")
     }
 
-    it should "serialize non-empty records" in {
-      val record = Record(Number(1), Number(2), Text("3"), True)
-      record.toRecon should equal ("{1,2,\"3\",true}")
-    }
-
-    it should "serialize records with ident-keyed slots" in {
+    it should "serialize records with ident keyed slots" in {
       val record = Record(Slot("a", Number(1)), False, Slot("c", Number(3)))
       record.toRecon should equal ("{a:1,false,c:3}")
     }
 
-    it should "serialize records with value-keyed slots" in {
+    it should "serialize records with value keyed slots" in {
       val record = Record(Slot(Number(1), Text("one")), Slot(Record(Attr("id"), Text("foo")), Text("bar")))
-      record.toRecon should equal ("{1:one,@id\"foo\":bar}")
+      record.toRecon should equal ("{1:one,@id foo:bar}")
     }
 
-    it should "serialize attributed records with a single slot" in {
+    it should "serialize records with extant slots" in {
+      val record = Record(Slot(Text("blank")))
+      record.toRecon should equal ("{blank:}")
+    }
+
+    it should "serialize attributed records" in {
       val record = Record(Attr("hello"), Slot("subject", Text("world!")))
       record.toRecon should equal ("@hello{subject:\"world!\"}")
     }

@@ -62,9 +62,9 @@ private[recon] trait ReconParser extends ReconFactory { ReconParser =>
     c >= 0x10000 && c <= 0xEFFFF
 
   private[recon] def isBase64Char(c: Int): Boolean =
+    c >= '0' && c <= '9' ||
     c >= 'A' && c <= 'Z' ||
     c >= 'a' && c <= 'z' ||
-    c >= '0' && c <= '9' ||
     c == '+' || c == '-' ||
     c == '/' || c == '_'
 
@@ -391,7 +391,7 @@ private[recon] trait ReconParser extends ReconFactory { ReconParser =>
         }
         if (s == 5) {
           while ((!input.isEmpty || input.isDone) && value.isCont) value = value.feed(input)
-          if (value.isDone) return Iteratee.done(builder.state)
+          if (value.isDone) return value.asDone
           else if (value.isError) return value.asError
         }
       }
@@ -740,7 +740,7 @@ private[recon] trait ReconParser extends ReconFactory { ReconParser =>
         if (s == 2) {
           while (!input.isEmpty && {
               c = input.head;
-              c != '@' && c != '{' && c != '}' && c != '[' && c != ']' && c != '\\'
+              c != '@' && c != '[' && c != '\\' && c != ']' && c != '{' && c != '}'
             }) {
             input.step()
             if (text eq null) text = TextBuilder
@@ -814,7 +814,7 @@ private[recon] trait ReconParser extends ReconFactory { ReconParser =>
           if (!input.isEmpty) {
             c = input.head
             if (text eq null) text = TextBuilder
-            if (c == '"' || c == '\\' || c == '/' || c == '@' || c == '{' || c == '}' || c == '[' || c == ']') {
+            if (c == '"' || c == '/' || c == '@' || c == '[' || c == '\\' || c == ']' || c == '{' || c == '}') {
               input.step()
               text.append(c)
               s = 2
@@ -936,7 +936,7 @@ private[recon] trait ReconParser extends ReconFactory { ReconParser =>
         if (s == 3) {
           if (!input.isEmpty) {
             c = input.head
-            if (c == '"' || c == '\\' || c == '/' || c == '@' || c == '{' || c == '}' || c == '[' || c == ']') {
+            if (c == '"' || c == '/' || c == '@' || c == '[' || c == '\\' || c == ']' || c == '{' || c == '}') {
               input.step()
               text.append(c)
               s = 2

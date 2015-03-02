@@ -396,15 +396,27 @@ trait Recon { Recon =>
           hasAttrs = true
         }
         if (!items.isEmpty) {
-          if (hasAttrs) builder.append('{')
-          writeReconItem(items.head, builder)
           items.step()
-          while (!items.isEmpty) {
-            builder.append(',')
-            writeReconItem(items.head, builder)
-            items.step()
+          if (hasAttrs && items.isEmpty) {
+            if (item.isSlot) {
+              builder.append('{')
+              item.writeRecon(builder, inMarkup = false)
+              builder.append('}')
+            }
+            else {
+              builder.append(' ');
+              item.writeRecon(builder, inMarkup = false)
+            }
           }
-          if (hasAttrs) builder.append('}')
+          else {
+            writeReconItem(item, builder)
+            while (!items.isEmpty) {
+              item = items.head
+              builder.append(',')
+              writeReconItem(item, builder)
+              items.step()
+            }
+          }
         }
         else if (!hasAttrs) {
           builder.append('{')
@@ -440,8 +452,10 @@ trait Recon { Recon =>
               item.writeRecon(builder, inMarkup = false)
               builder.append('}')
             }
-            else if (item.isText) item.asText.writeReconString(builder)
-            else item.writeRecon(builder, inMarkup = false)
+            else {
+              builder.append(' ');
+              item.writeRecon(builder, inMarkup = false)
+            }
           }
           else {
             builder.append('{')
@@ -489,7 +503,7 @@ trait Recon { Recon =>
           val cs = item.asText.iterator
           while (!cs.isEmpty) {
             cs.head match {
-              case c @ ('\\' | '@' | '{' | '}' | '[' | ']') =>
+              case c @ ('@' | '[' | '\\' | ']' | '{' | '}') =>
                 builder.append('\\'); builder.append(c)
               case c => builder.append(c)
             }
@@ -564,7 +578,7 @@ trait Recon { Recon =>
       builder.append('[')
       while (!cs.isEmpty) {
         cs.head match {
-          case c @ ('\\' | '@' | '{' | '}' | '[' | ']') =>
+          case c @ ('@' | '[' | '\\' | ']' | '{' | '}') =>
             builder.append('\\'); builder.append(c)
           case c => builder.append(c)
         }
@@ -578,14 +592,14 @@ trait Recon { Recon =>
       builder.append('"')
       while (!cs.isEmpty) {
         cs.head match {
-          case c @ ('"' | '\\' | '@' | '{' | '}' | '[' | ']') =>
-                       builder.append('\\'); builder.append(c)
+          case c @ ('"' | '\\') =>
+            builder.append('\\'); builder.append(c)
           case '\b' => builder.append('\\'); builder.append('b')
           case '\f' => builder.append('\\'); builder.append('f')
           case '\n' => builder.append('\\'); builder.append('n')
           case '\r' => builder.append('\\'); builder.append('r')
           case '\t' => builder.append('\\'); builder.append('t')
-          case c    => builder.append(c)
+          case c => builder.append(c)
         }
         cs.step()
       }

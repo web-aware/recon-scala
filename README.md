@@ -25,7 +25,7 @@ identifier
 
 #### Numbers
 
-Numbers enocde as decimal literals.
+Numbers encode as decimal literals.
 
 ```recon
 1
@@ -34,7 +34,7 @@ Numbers enocde as decimal literals.
 
 #### Data
 
-RECON encodes binary data as base64 literals following an initial `%`.
+RECON serializes binary data as base64 literals following an initial `%`.
 
 ```recon
 %AA==
@@ -100,7 +100,7 @@ is exactly equivalent to the below example.
 
 ### Attributes
 
-The @ sign introduces an attribute.  Attributes are syntactic sugar for
+The @ sign introduces an attribute.  Attributes serve as syntactic sugar for
 pulling key fields out in front of a record.  The previous markup example
 further reduces to the form below.
 
@@ -115,15 +115,15 @@ further reduces to the form below.
 }
 ```
 
-Note that the `em:` field has no value.  RECON is an algebraic datatype, an
-unspecified value is said to be _extant_.  `Extant` is one of the unit type
-constructors of the RECON algebraic datatype, the other being `Absent`.
-Neither `Extant` nor `Absent` have explicit syntax, but they play important
-roles in the RECON data model.  Think of `Extant` and `Absent` as more
-meaningful versions of `null`.
+Note that the `em:` field has no value.  The RECON data model forms an
+algebraic datatype.  Am unspecified value is said to be _extant_.  `Extant`
+is one of the unit type constructors of the RECON algebraic datatype, the
+other unit constructor being `Absent`.  Neither `Extant` nor `Absent` have
+explicit syntax, but they play important roles in the RECON data model.
+Think of `Extant` and `Absent` as more meaningful versions of `null`.
 
-Of course, attributes can have values too.  Place parameters in parentheses
-after an attribute name.
+Of course, attributes can have values too.  Place attribute parameters in
+parentheses following an attribute name.
 
 ```recon
 @answer(42)
@@ -154,8 +154,8 @@ An example, with its desugared equivalent, follows.
 }
 ```
 
-When an attribute precedes a value, the value gets appended to the record
-holding the attribute fields.  The first unkeyed item in a record is known as
+When attributes precedes a value, the value gets appended to the record
+holding the attributes.  The first unkeyed item in a record is also known as
 the record's _target_.
 
 ```recon
