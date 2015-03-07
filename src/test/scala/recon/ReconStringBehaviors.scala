@@ -15,7 +15,7 @@ trait ReconStringBehaviors extends Matchers { this: FlatSpec =>
     }
 
     it should "interpolate empty markup" in {
-      recon"[]" should equal (Text.empty)
+      recon"[]" should equal (Record.empty)
     }
 
     it should "interpolate empty strings" in {
@@ -254,7 +254,7 @@ trait ReconStringBehaviors extends Matchers { this: FlatSpec =>
 
     it should "interpolate single extant attributes with single parameters" in {
       recon"""@hello({})"""      should equal (Record(Attr("hello", Record.empty)))
-      recon"""@hello([world])""" should equal (Record(Attr("hello", Text("world"))))
+      recon"""@hello([world])""" should equal (Record(Attr("hello", Record(Text("world")))))
       recon"""@hello("world")""" should equal (Record(Attr("hello", Text("world"))))
       recon"""@hello(42)"""      should equal (Record(Attr("hello", Number(42))))
       recon"""@hello(true)"""    should equal (Record(Attr("hello", True)))
@@ -379,12 +379,83 @@ trait ReconStringBehaviors extends Matchers { this: FlatSpec =>
         Record(Attr("hello", Record(Slot("name", Text("world")))), False))
     }
 
-    it should "interpolate plain markup as text" in {
-      recon"[test]" should equal (Text("test"))
+    it should "interpolate postfix attributed empty records" in {
+      recon"""{} @signed""" should equal (Record(Attr("signed")))
+      recon"""{} @signed()""" should equal (Record(Attr("signed")))
+      recon"""{} @signed("me")""" should equal (Record(Attr("signed", Text("me"))))
+      recon"""{} @signed(by: "me")""" should equal(
+        Record(Attr("signed", Record(Slot("by", Text("me"))))))
+    }
+
+    it should "interpolate postfix attributed nonempty records" in {
+      recon"""{ {}, [] } @signed""" should equal (Record(Record.empty, Text.empty, Attr("signed")))
+      recon"""{ "world", 42 } @signed()""" should equal (Record(Text("world"), Number(42), Attr("signed")))
+      recon"""{ number: 42, true } @signed(by: "me")""" should equal(
+        Record(Slot("number", Number(42)), True, Attr("signed", Record(Slot("by", Text("me"))))))
+    }
+
+    it should "interpolate postfix attributed empty markup" in {
+      recon"""[] @signed""" should equal (Record(Attr("signed")))
+      recon"""[] @signed()""" should equal (Record(Attr("signed")))
+      recon"""[] @signed("me")""" should equal (Record(Attr("signed", Text("me"))))
+      recon"""[] @signed(by: "me")""" should equal(
+        Record(Attr("signed", Record(Slot("by", Text("me"))))))
+    }
+
+    it should "interpolate postfix attributed empty strings" in {
+      recon""" "" @signed""" should equal (Record(Text.empty, Attr("signed")))
+      recon""" "" @signed()""" should equal (Record(Text.empty, Attr("signed")))
+      recon""" "" @signed("me")""" should equal (Record(Text.empty, Attr("signed", Text("me"))))
+      recon""" "" @signed(by: "me")""" should equal(
+        Record(Text.empty, Attr("signed", Record(Slot("by", Text("me"))))))
+    }
+
+    it should "interpolate postfix attributed non-empty strings" in {
+      recon""" "test" @signed""" should equal (Record(Text("test"), Attr("signed")))
+      recon""" "test" @signed()""" should equal (Record(Text("test"), Attr("signed")))
+      recon""" "test" @signed("me")""" should equal (Record(Text("test"), Attr("signed", Text("me"))))
+      recon""" "test" @signed(by: "me")""" should equal(
+        Record(Text("test"), Attr("signed", Record(Slot("by", Text("me"))))))
+    }
+
+    it should "interpolate postfix attributed empty data" in {
+      recon"""% @signed""" should equal (Record(Data.empty, Attr("signed")))
+      recon"""% @signed()""" should equal (Record(Data.empty, Attr("signed")))
+      recon"""% @signed("me")""" should equal (Record(Data.empty, Attr("signed", Text("me"))))
+      recon"""% @signed(by: "me")""" should equal(
+        Record(Data.empty, Attr("signed", Record(Slot("by", Text("me"))))))
+    }
+
+    it should "interpolate postfix attributed non-empty data" in {
+      recon"""%AA== @signed""" should equal (Record(Data("AA=="), Attr("signed")))
+      recon"""%AAA= @signed()""" should equal (Record(Data("AAA="), Attr("signed")))
+      recon"""%AAAA @signed("me")""" should equal (Record(Data("AAAA"), Attr("signed", Text("me"))))
+      recon"""%ABCDabcd12+/ @signed(by: "me")""" should equal(
+        Record(Data("ABCDabcd12+/"), Attr("signed", Record(Slot("by", Text("me"))))))
+    }
+
+    it should "interpolate postfix attributed numbers" in {
+      recon"""42 @signed""" should equal (Record(Number(42), Attr("signed")))
+      recon"""-42 @signed()""" should equal (Record(Number(-42), Attr("signed")))
+      recon"""42.0 @signed("me")""" should equal (Record(Number(42.0), Attr("signed", Text("me"))))
+      recon"""-42.0 @signed(by: "me")""" should equal(
+        Record(Number(-42.0), Attr("signed", Record(Slot("by", Text("me"))))))
+    }
+
+    it should "interpolate postfix attributed booleans" in {
+      recon"""true @signed""" should equal (Record(True, Attr("signed")))
+      recon"""false @signed()""" should equal (Record(False, Attr("signed")))
+      recon"""true @signed("me")""" should equal (Record(True, Attr("signed", Text("me"))))
+      recon"""false @signed(by: "me")""" should equal(
+        Record(False, Attr("signed", Record(Slot("by", Text("me"))))))
+    }
+
+    it should "interpolate plain markup" in {
+      recon"[test]" should equal (Record(Text("test")))
     }
 
     it should "interpolate plain markup with escapes" in {
-      recon"""[\"\\\/\@\{\}\[\]\b\f\n\r\t]""" should equal (Text("\"\\/@{}[]\b\f\n\r\t"))
+      recon"""[\"\\\/\@\{\}\[\]\b\f\n\r\t]""" should equal (Record(Text("\"\\/@{}[]\b\f\n\r\t")))
     }
 
     it should "interpolate markup with embedded markup" in {
@@ -531,6 +602,19 @@ trait ReconStringBehaviors extends Matchers { this: FlatSpec =>
       recon"@span(class:$x,false)" should equal (Record(Attr("span", Record(Slot("class", x), False))))
       recon"@span(true,class:$x,false)" should equal (
         Record(Attr("span", Record(True, Slot("class", x), False))))
+    }
+
+    it should "substitute variables in postfix attribute parameters" in {
+      val x = Text("world")
+      recon"{} @cite($x)" should equal (Record(Attr("cite", x)))
+      recon"{} @cite(class:$x)" should equal (Record(Attr("cite", Record(Slot("class", x)))))
+      recon"{} @cite(true,$x)" should equal (Record(Attr("cite", Record(True, x))))
+      recon"{} @cite($x,false)" should equal (Record(Attr("cite", Record(x, False))))
+      recon"{} @cite(true,$x,false)" should equal (Record(Attr("cite", Record(True, x, False))))
+      recon"{} @cite(true,class:$x)" should equal (Record(Attr("cite", Record(True, Slot("class", x)))))
+      recon"{} @cite(class:$x,false)" should equal (Record(Attr("cite", Record(Slot("class", x), False))))
+      recon"{} @cite(true,class:$x,false)" should equal (
+        Record(Attr("cite", Record(True, Slot("class", x), False))))
     }
 
     it should "substitute variables in markup" in {

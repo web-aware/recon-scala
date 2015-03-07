@@ -397,8 +397,8 @@ trait Recon { Recon =>
         }
         if (!items.isEmpty) {
           items.step()
-          if (hasAttrs && items.isEmpty) {
-            if (item.isSlot) {
+          if (hasAttrs && (items.isEmpty || !items.dup.forall(_.isAttr))) {
+            if (item.isRecord || item.isSlot) {
               builder.append('{')
               item.writeRecon(builder, inMarkup = false)
               builder.append('}')
@@ -408,6 +408,14 @@ trait Recon { Recon =>
               item.writeRecon(builder, inMarkup = false)
             }
           }
+          else if (!items.isEmpty && items.dup.forall(_.isAttr)) {
+            if (item.isRecord || item.isSlot) {
+              builder.append('{')
+              item.writeRecon(builder, inMarkup = false)
+              builder.append('}')
+            }
+            else item.writeRecon(builder, inMarkup = false)
+          }
           else {
             writeReconItem(item, builder)
             while (!items.isEmpty) {
@@ -416,6 +424,10 @@ trait Recon { Recon =>
               writeReconItem(item, builder)
               items.step()
             }
+          }
+          while (!items.isEmpty) {
+            items.head.asAttr.writeRecon(builder)
+            items.step()
           }
         }
         else if (!hasAttrs) {
@@ -438,16 +450,21 @@ trait Recon { Recon =>
         }
         if (!items.isEmpty) {
           items.step()
-          if (hasAttrs && items.isEmpty) {
+          if (hasAttrs && (items.isEmpty || !items.dup.forall(_.isAttr))) {
             if (inMarkup) {
               if (item.isRecord || item.isText) item.writeRecon(builder, inMarkup = true)
               else {
                 builder.append('{')
                 item.writeRecon(builder, inMarkup = false)
+                while (!items.isEmpty) {
+                  builder.append(',')
+                  writeReconItem(items.head, builder)
+                  items.step()
+                }
                 builder.append('}')
               }
             }
-            else if (item.isSlot) {
+            else if (item.isRecord || item.isSlot) {
               builder.append('{')
               item.writeRecon(builder, inMarkup = false)
               builder.append('}')
@@ -457,16 +474,27 @@ trait Recon { Recon =>
               item.writeRecon(builder, inMarkup = false)
             }
           }
+          else if (!items.isEmpty && items.dup.forall(_.isAttr)) {
+            if (item.isRecord || item.isSlot) {
+              builder.append('{')
+              item.writeRecon(builder, inMarkup = false)
+              builder.append('}')
+            }
+            else item.writeRecon(builder, inMarkup = false)
+          }
           else {
             builder.append('{')
             writeReconItem(item, builder)
-            while (!items.isEmpty) {
-              item = items.head
+            while (!items.isEmpty && ({ item = items.head; !item.isAttr } || !items.dup.forall(_.isAttr))) {
               builder.append(',')
               writeReconItem(item, builder)
               items.step()
             }
             builder.append('}')
+          }
+          while (!items.isEmpty) {
+            items.head.asAttr.writeRecon(builder)
+            items.step()
           }
         }
         else if (!hasAttrs) {

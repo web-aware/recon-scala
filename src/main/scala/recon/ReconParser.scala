@@ -17,6 +17,9 @@ private[recon] trait ReconParser extends ReconFactory { ReconParser =>
   lazy val NumberParser: Iteratee[Int, Number]     = new NumberParser()
   lazy val IdentParser: Iteratee[Int, Text]        = new IdentParser()
 
+  def RecordParser(builder: ItemBuilder with State[Value]): Iteratee[Int, Value] = new RecordParser(builder)
+  def MarkupParser(builder: ItemBuilder with State[Value]): Iteratee[Int, Value] = new MarkupParser(builder)
+
 
   private[recon] def isSpace(c: Int): Boolean = c == 0x20 || c == 0x9
 
@@ -322,24 +325,14 @@ private[recon] trait ReconParser extends ReconFactory { ReconParser =>
               s = 2
             }
             else if (c == '{') {
-              if (builder ne null) {
-                value = new RecordParser(builder)
-                s = 5
-              }
-              else {
-                value = RecordParser
-                s = 4
-              }
+              if (builder eq null) builder = RecordBuilder
+              value = RecordParser(builder)
+              s = 5
             }
             else if (c == '[') {
-              if (builder ne null) {
-                value = new MarkupParser(builder)
-                s = 5
-              }
-              else {
-                value = MarkupParser
-                s = 4
-              }
+              if (builder eq null) builder = RecordBuilder
+              value = MarkupParser(builder)
+              s = 5
             }
             else if (c == '"') {
               value = StringParser
@@ -385,14 +378,39 @@ private[recon] trait ReconParser extends ReconFactory { ReconParser =>
           if (value.isDone) {
             if (builder eq null) builder = ValueBuilder
             builder.appendValue(value.bind)
-            return Iteratee.done(builder.state)
+            value = null
+            s = 6
           }
           else if (value.isError) return value.asError
         }
         if (s == 5) {
           while ((!input.isEmpty || input.isDone) && value.isCont) value = value.feed(input)
-          if (value.isDone) return value.asDone
+          if (value.isDone) {
+            value = null
+            s = 6
+          }
           else if (value.isError) return value.asError
+        }
+        if (s == 6) {
+          while (!input.isEmpty && isSpace(input.head)) input.step()
+          if (!input.isEmpty) {
+            if (input.head == '@') {
+              field = AttrParser
+              s = 7
+            }
+            else return Iteratee.done(builder.state)
+          }
+          else if (input.isDone) return Iteratee.done(builder.state)
+        }
+        if (s == 7) {
+          while ((!input.isEmpty || input.isDone) && field.isCont) field = field.feed(input)
+          if (field.isDone) {
+            if (builder eq null) builder = ValueBuilder
+            builder.appendField(field.bind)
+            field = null
+            s = 6
+          }
+          else if (field.isError) return field.asError
         }
       }
       new BlockValueParser(builder, field, value, s)
@@ -417,21 +435,35 @@ private[recon] trait ReconParser extends ReconFactory { ReconParser =>
         new BlockValueParser(builder, field, value, s)
       }
       else if (s == 4) {
-        val value = this.value.asInstanceOf[Parser[Value]].interpolate(item)
+        var value = this.value.asInstanceOf[Parser[Value]].interpolate(item)
         if (value.isError) return value.asError
         if (value.isDone) {
           val builder = if (this.builder ne null) this.builder else ValueBuilder
           builder.appendValue(value.bind)
-          Iteratee.done(builder.state)
+          value = null
+          s = 6
         }
-        else if (value.isError) value.asError
-        else new BlockValueParser(builder, field, value, s)
+        new BlockValueParser(builder, field, value, s)
       }
       else if (s == 5) {
-        val value = this.value.asInstanceOf[Parser[Value]].interpolate(item)
+        var value = this.value.asInstanceOf[Parser[Value]].interpolate(item)
         if (value.isError) return value.asError
-        if (value.isDone) Iteratee.done(builder.state)
-        else new BlockValueParser(builder, field, value, s)
+        if (value.isDone) {
+          value = null
+          s = 6
+        }
+        new BlockValueParser(builder, field, value, s)
+      }
+      else if (s == 7) {
+        var field = this.field.asInstanceOf[Parser[Field]].interpolate(item)
+        if (field.isError) return field.asError
+        if (field.isDone) {
+          val builder = this.builder
+          builder.appendField(field.bind)
+          field = null
+          s = 6
+        }
+        new BlockValueParser(builder, field, value, s)
       }
       else super.interpolate(item)
     }
@@ -467,7 +499,7 @@ private[recon] trait ReconParser extends ReconFactory { ReconParser =>
             }
             else if (c == '{') {
               if (builder ne null) {
-                value = new RecordParser(builder)
+                value = RecordParser(builder)
                 s = 5
               }
               else {
@@ -477,7 +509,7 @@ private[recon] trait ReconParser extends ReconFactory { ReconParser =>
             }
             else if (c == '[') {
               if (builder ne null) {
-                value = new MarkupParser(builder)
+                value = MarkupParser(builder)
                 s = 5
               }
               else {
@@ -749,14 +781,9 @@ private[recon] trait ReconParser extends ReconFactory { ReconParser =>
           if (!input.isEmpty) {
             if (c == ']') {
               input.step()
-              if (builder eq null) {
-                if (text eq null) text = TextBuilder
-                return Iteratee.done(text.state)
-              }
-              else {
-                if (text ne null) builder.appendValue(text.state)
-                return Iteratee.done(builder.state)
-              }
+              if (builder eq null) builder = RecordBuilder
+              if (text ne null) builder.appendValue(text.state)
+              return Iteratee.done(builder.state)
             }
             else if (c == '@') {
               if (builder eq null) builder = RecordBuilder
@@ -773,7 +800,7 @@ private[recon] trait ReconParser extends ReconFactory { ReconParser =>
                 builder.appendValue(text.state)
                 text = null
               }
-              value = new RecordParser(builder)
+              value = RecordParser(builder)
               s = 4
             }
             else if (c == '[') {
@@ -782,7 +809,7 @@ private[recon] trait ReconParser extends ReconFactory { ReconParser =>
                 builder.appendValue(text.state)
                 text = null
               }
-              value = new MarkupParser(builder)
+              value = MarkupParser(builder)
               s = 4
             }
             else if (c == '\\') {

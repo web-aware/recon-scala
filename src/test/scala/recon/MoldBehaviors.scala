@@ -150,13 +150,13 @@ trait MoldBehaviors extends Matchers { this: FlatSpec =>
     }
 
     it should "form text from String values" in {
-      recon("") should equal (recon"[]")
-      recon("test") should equal (recon"[test]")
+      recon("") should equal (recon""" "" """)
+      recon("test") should equal (recon""" "test" """)
     }
 
     it should "cast text to String values" in {
-      recon"[]".coerce[String] should equal ("")
-      recon"[test]".coerce[String] should equal ("test")
+      recon""" "" """.coerce[String] should equal ("")
+      recon""" "test" """.coerce[String] should equal ("test")
     }
 
     it should "cast numbers to String values" in {

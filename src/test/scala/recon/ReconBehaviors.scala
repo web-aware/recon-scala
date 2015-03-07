@@ -90,9 +90,52 @@ trait ReconBehaviors extends Matchers { this: FlatSpec =>
       record.toRecon should equal ("{blank:}")
     }
 
-    it should "serialize attributed records" in {
-      val record = Record(Attr("hello"), Slot("subject", Text("world!")))
-      record.toRecon should equal ("@hello{subject:\"world!\"}")
+    it should "serialize attributed empty records" in {
+      Record(Attr("hello"), Record.empty).toRecon should equal ("@hello{{}}")
+    }
+
+    it should "serialize attributed empty text" in {
+      Record(Attr("hello"), Text.empty).toRecon should equal ("@hello \"\"")
+    }
+
+    it should "serialize attributed non-empty text" in {
+      Record(Attr("hello"), Text("world!")).toRecon should equal ("@hello \"world!\"")
+    }
+
+    it should "serialize attributed numbers" in {
+      Record(Attr("answer"), Number(42)).toRecon should equal ("@answer 42")
+    }
+
+    it should "serialize attributed identifiers" in {
+      Record(Attr("answer"), True).toRecon should equal ("@answer true")
+    }
+
+    it should "serialize attributed slots" in {
+      Record(Attr("hello"), Slot("subject", Text("world!"))).toRecon should equal ("@hello{subject:\"world!\"}")
+    }
+
+    it should "serialize postfix attributed empty records" in {
+      Record(Record.empty, Attr("signed")).toRecon should equal ("{{}}@signed")
+    }
+
+    it should "serialize postfix attributed empty text" in {
+      Record(Text.empty, Attr("signed")).toRecon should equal ("\"\"@signed")
+    }
+
+    it should "serialize postfix attributed non-empty text" in {
+      Record(Text("world!"), Attr("signed")).toRecon should equal ("\"world!\"@signed")
+    }
+
+    it should "serialize postfix attributed numbers" in {
+      Record(Number(42), Attr("signed")).toRecon should equal ("42@signed")
+    }
+
+    it should "serialize postfix attributed identifiers" in {
+      Record(Text("I"), Attr("signed")).toRecon should equal ("I@signed")
+    }
+
+    it should "serialize postfix attributed slots" in {
+      Record(Slot("subject", Text("world!")), Attr("signed")).toRecon should equal ("{subject:\"world!\"}@signed")
     }
 
     it should "serialize markup" in {
