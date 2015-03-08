@@ -59,7 +59,7 @@ trait ReconBehaviors extends Matchers { this: FlatSpec =>
     }
 
     it should "serialize extant attributes with single parameters" in {
-      Record(Attr("answer", Record.empty)).toRecon should equal ("@answer({})")
+      Record(Attr("answer", Record.empty)).toRecon should equal ("@answer()")
       Record(Attr("answer", Text("42"))).toRecon should equal ("@answer(\"42\")")
       Record(Attr("answer", Number(42))).toRecon should equal ("@answer(42)")
       Record(Attr("answer", True)).toRecon should equal ("@answer(true)")
@@ -106,7 +106,7 @@ trait ReconBehaviors extends Matchers { this: FlatSpec =>
       Record(Attr("answer"), Number(42)).toRecon should equal ("@answer 42")
     }
 
-    it should "serialize attributed identifiers" in {
+    it should "serialize attributed booleans" in {
       Record(Attr("answer"), True).toRecon should equal ("@answer true")
     }
 
@@ -130,12 +130,28 @@ trait ReconBehaviors extends Matchers { this: FlatSpec =>
       Record(Number(42), Attr("signed")).toRecon should equal ("42@signed")
     }
 
-    it should "serialize postfix attributed identifiers" in {
-      Record(Text("I"), Attr("signed")).toRecon should equal ("I@signed")
+    it should "serialize postfix attributed booleans" in {
+      Record(True, Attr("signed")).toRecon should equal ("true@signed")
     }
 
     it should "serialize postfix attributed slots" in {
       Record(Slot("subject", Text("world!")), Attr("signed")).toRecon should equal ("{subject:\"world!\"}@signed")
+    }
+
+    it should "serialize single values with multiple postfix attributes" in {
+      Record(Number(6), Attr("months"), Attr("remaining")).toRecon should equal ("6@months@remaining")
+    }
+
+    it should "serialize single values with circumfix attributes" in {
+      Record(Attr("a"), Attr("b"), False, Attr("x"), Attr("y")).toRecon should equal ("@a@b false@x@y")
+    }
+
+    it should "serialize multiple items with multiple postfix attributes" in {
+      Record(Number(1), Number(2), Attr("x"), Attr("y")).toRecon should equal ("{1,2}@x@y")
+    }
+
+    it should "serialize multiple items with circumfix attributes" in {
+      Record(Attr("a"), Attr("b"), Number(1), Number(2), Attr("x"), Attr("y")).toRecon should equal ("@a@b{1,2}@x@y")
     }
 
     it should "serialize markup" in {

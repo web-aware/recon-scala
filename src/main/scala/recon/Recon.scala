@@ -340,6 +340,7 @@ trait Recon { Recon =>
     def apply(key: Value): Value
 
     def head: Item
+    def foot: Item
     def tail: Record
 
     def :+ (item: Item): Record
@@ -360,7 +361,11 @@ trait Recon { Recon =>
       Absent
     }
 
-    def hasAttrs: Boolean = this.exists(_.isAttr)
+    def hasAttrs: Boolean = !isEmpty && (head.isAttr || foot.isAttr)
+
+    def hasPrefixAttrs: Boolean = !isEmpty && head.isAttr
+
+    def hasPostfixAttrs: Boolean = !isEmpty && foot.isAttr
 
     def isMarkup: Boolean = {
       val items = iterator
@@ -386,53 +391,17 @@ trait Recon { Recon =>
 
     override def writeReconBlock(builder: StringBuilder): Unit = {
       if (isMarkup) writeReconMarkup(builder, inMarkup = false)
+      else if (hasAttrs) writeRecon(builder, inMarkup = false)
       else {
         val items = iterator
-        var item = null.asInstanceOf[Item]
-        var hasAttrs = false
-        while (!items.isEmpty && { item = items.head; item.isAttr }) {
-          item.writeRecon(builder)
-          items.step()
-          hasAttrs = true
-        }
         if (!items.isEmpty) {
+          writeReconItem(items.head, builder)
           items.step()
-          if (hasAttrs && (items.isEmpty || !items.dup.forall(_.isAttr))) {
-            if (item.isRecord || item.isSlot) {
-              builder.append('{')
-              item.writeRecon(builder, inMarkup = false)
-              builder.append('}')
-            }
-            else {
-              builder.append(' ');
-              item.writeRecon(builder, inMarkup = false)
-            }
-          }
-          else if (!items.isEmpty && items.dup.forall(_.isAttr)) {
-            if (item.isRecord || item.isSlot) {
-              builder.append('{')
-              item.writeRecon(builder, inMarkup = false)
-              builder.append('}')
-            }
-            else item.writeRecon(builder, inMarkup = false)
-          }
-          else {
-            writeReconItem(item, builder)
-            while (!items.isEmpty) {
-              item = items.head
-              builder.append(',')
-              writeReconItem(item, builder)
-              items.step()
-            }
-          }
           while (!items.isEmpty) {
-            items.head.asAttr.writeRecon(builder)
+            builder.append(',')
+            writeReconItem(items.head, builder)
             items.step()
           }
-        }
-        else if (!hasAttrs) {
-          builder.append('{')
-          builder.append('}')
         }
       }
     }
@@ -450,17 +419,12 @@ trait Recon { Recon =>
         }
         if (!items.isEmpty) {
           items.step()
-          if (hasAttrs && (items.isEmpty || !items.dup.forall(_.isAttr))) {
+          if (hasAttrs && items.isEmpty) {
             if (inMarkup) {
               if (item.isRecord || item.isText) item.writeRecon(builder, inMarkup = true)
               else {
                 builder.append('{')
                 item.writeRecon(builder, inMarkup = false)
-                while (!items.isEmpty) {
-                  builder.append(',')
-                  writeReconItem(items.head, builder)
-                  items.step()
-                }
                 builder.append('}')
               }
             }
@@ -480,7 +444,10 @@ trait Recon { Recon =>
               item.writeRecon(builder, inMarkup = false)
               builder.append('}')
             }
-            else item.writeRecon(builder, inMarkup = false)
+            else {
+              if (hasAttrs) builder.append(' ')
+              item.writeRecon(builder, inMarkup = false)
+            }
           }
           else {
             builder.append('{')
@@ -1130,6 +1097,8 @@ final class Record private[recon] (
     }
 
   override def head: Item = self.head
+
+  override def foot: Item = self.foot
 
   override def tail: Record =
     new Record(self.tail, if ((index ne null) && self.head.isValue) index else null)

@@ -212,7 +212,7 @@ trait ReconStringBehaviors extends Matchers { this: FlatSpec =>
         false
       """ should equal (Record(
         Slot("record", Record.empty),
-        Slot("markup", Text.empty),
+        Slot("markup", Record.empty),
         Text.empty,
         Data("AA=="),
         Slot("integer", Number(0)),
@@ -234,7 +234,7 @@ trait ReconStringBehaviors extends Matchers { this: FlatSpec =>
         false
       } """ should equal (Record(
         Slot("record", Record.empty),
-        Slot("markup", Text.empty),
+        Slot("markup", Record.empty),
         Text.empty,
         Data("AA=="),
         Slot("integer", Number(0)),
@@ -316,7 +316,7 @@ trait ReconStringBehaviors extends Matchers { this: FlatSpec =>
         Record(Attr("hello", Record(Slot("name", Text("world"))))))
     }
 
-    it should "interpolate attributed nonempty records" in {
+    it should "interpolate attributed non-empty records" in {
       recon"""@hello { {}, [] }""" should equal (Record(Attr("hello"), Record.empty, Text.empty))
       recon"""@hello() { "world", 42 }""" should equal (Record(Attr("hello"), Text("world"), Number(42)))
       recon"""@hello(name: "world") { number: 42, true }""" should equal(
@@ -387,7 +387,7 @@ trait ReconStringBehaviors extends Matchers { this: FlatSpec =>
         Record(Attr("signed", Record(Slot("by", Text("me"))))))
     }
 
-    it should "interpolate postfix attributed nonempty records" in {
+    it should "interpolate postfix attributed non-empty records" in {
       recon"""{ {}, [] } @signed""" should equal (Record(Record.empty, Text.empty, Attr("signed")))
       recon"""{ "world", 42 } @signed()""" should equal (Record(Text("world"), Number(42), Attr("signed")))
       recon"""{ number: 42, true } @signed(by: "me")""" should equal(
