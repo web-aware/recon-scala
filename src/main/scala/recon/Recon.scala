@@ -520,6 +520,10 @@ trait Recon { Recon =>
       if (recon eq Recon) asInstanceOf[recon.Record]
       else this.map(_ in recon)(recon.RecordBuilder)
 
+    def drop(lower: Int): Record
+
+    def take(upper: Int): Record
+
     def valuesIterator: Iterator[Value] = new ReconRecordValuesIterator(iterator)
 
     protected override def stringPrefix: String = "Record"
@@ -1102,6 +1106,10 @@ final class Record private[recon] (
 
   override def tail: Record =
     new Record(self.tail, if ((index ne null) && self.head.isValue) index else null)
+
+  override def drop(lower: Int): Record = new Record(self.drop(lower))
+
+  override def take(upper: Int): Record = new Record(self.take(upper))
 
   override def :+ (item: Item): Record =
     new Record(
