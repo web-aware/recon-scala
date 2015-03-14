@@ -180,6 +180,11 @@ trait MoldBehaviors extends Matchers { this: FlatSpec =>
       recon"{ 1, [2], 3 }".coerce[Array[String]] should equal (Array("1", "2", "3"))
     }
 
+    it should "cast primitive values to unary arrays" in {
+      recon"1".coerce[Array[Int]] should equal (Array(1))
+      recon"test".coerce[Array[String]] should equal (Array("test"))
+    }
+
     it should "form records from containers" in {
       recon(Seq(1, 2, 3)) should equal (recon"{ 1, 2, 3 }")
       recon(Set(1, 2, 3)) should equal (recon"{ 1, 2, 3 }")
@@ -192,6 +197,13 @@ trait MoldBehaviors extends Matchers { this: FlatSpec =>
       recon"{ 1, [2], 3 }".coerce[Set[Double]] should equal (Set(1.0, 2.0, 3.0))
       recon"{ 1, [2], 3 }".coerce[Seq[String]] should equal (Seq("1", "2", "3"))
       recon"{ 1, [2], 3 }".coerce[Set[String]] should equal (Set("1", "2", "3"))
+    }
+
+    it should "cast primitive values to unary containers" in {
+      recon"1".coerce[Seq[Int]] should equal (Seq(1))
+      recon"1".coerce[Set[Int]] should equal (Set(1))
+      recon"test".coerce[Seq[String]] should equal (Seq("test"))
+      recon"test".coerce[Set[String]] should equal (Set("test"))
     }
 
     it should "form records from string maps" in {

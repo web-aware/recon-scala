@@ -302,7 +302,15 @@ private[recon] final class ArrayMold[A](implicit A: Mold[A], ATag: ClassTag[A]) 
         Bind(ys)
       }
     }
-    else Trap
+    else {
+      val x = A.cast(recon)(value)
+      if (x.canBind) {
+        val xs = ATag.newArray(1)
+        xs(0) = x.bind
+        Bind(xs)
+      }
+      else Trap
+    }
 
   override def norm(recon: Recon)(value: recon.Value): recon.Value =
     if (value.isRecord) value.asRecord.map { item =>
@@ -328,7 +336,11 @@ private[recon] final class ContainerMold[CC[X] <: Container[X], A](
     if (value.isRecord) Bind(value.asRecord.flatMap { item =>
       A.cast(recon)(item.value)
     } (CC.Builder[A]))
-    else Trap
+    else {
+      val x = A.cast(recon)(value)
+      if (x.canBind) Bind(CC(x.bind))
+      else Trap
+    }
 
   override def norm(recon: Recon)(value: recon.Value): recon.Value =
     if (value.isRecord) value.asRecord.map { item =>
