@@ -1,9 +1,9 @@
 name         := "recon-scala"
-version      := "0.0.0-SNAPSHOT"
-organization := "net.coeffect"
+version      := "0.1.0-SNAPSHOT"
+organization := "com.webaware"
 
 description  := "Record Notation (RECON) Scala Implementation"
-homepage     := Some(url("http://recon.coeffect.net/scala/"))
+homepage     := Some(url("https://github.com/web-aware/recon-scala"))
 licenses     := Seq("Apache 2" -> url("http://www.apache.org/licenses/LICENSE-2.0.txt"))
 
 scalaVersion := "2.11.6"
@@ -34,10 +34,9 @@ libraryDependencies ++= Seq(
   "org.scala-lang" % "scala-reflect" % scalaVersion.value % "provided",
   "org.scalatest" %% "scalatest" % "2.2.1" % "test")
 
-apiURL := Some(url("http://recon.coeffect.net/scala/api/"))
 scalacOptions in (Compile, doc) ++= {
   val tagOrBranch = if (version.value.endsWith("-SNAPSHOT")) "master" else "v" + version.value
-  val docSourceUrl = "https://github.com/coeffect/recon-scala/tree/" + tagOrBranch + "€{FILE_PATH}.scala"
+  val docSourceUrl = "https://github.com/web-aware/recon-scala/tree/" + tagOrBranch + "€{FILE_PATH}.scala"
   Seq("-groups",
       "-implicits",
       "-diagrams",
@@ -48,21 +47,16 @@ scalacOptions in (Compile, doc) ++= {
 
 pomIncludeRepository := (_ => false)
 publishMavenStyle := true
-publishTo := {
-  val nexus = "https://oss.sonatype.org/"
-  if (version.value.endsWith("SNAPSHOT")) Some("snapshots" at nexus + "content/repositories/snapshots")
-  else Some("releases" at nexus + "service/local/staging/deploy/maven2")
-}
 pomExtra := {
   <scm>
-    <url>git@github.com:coeffect/recon-scala.git</url>
-    <connection>scm:git:git@github.com:coeffect/recon-scala.git</connection>
+    <url>git@github.com:web-aware/recon-scala.git</url>
+    <connection>scm:git:git@github.com:web-aware/recon-scala.git</connection>
   </scm>
   <developers>
     <developer>
       <id>c9r</id>
       <name>Chris Sachs</name>
-      <email>chris@coeffect.net</email>
+      <email>chris@webaware.com</email>
     </developer>
   </developers>
 }

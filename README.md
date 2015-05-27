@@ -1,6 +1,6 @@
 # Record Notation (RECON)
 
-[![Build Status](https://travis-ci.org/coeffect/recon-scala.svg?branch=master)](https://travis-ci.org/coeffect/recon-scala)
+[![Build Status](https://travis-ci.org/web-aware/recon-scala.svg?branch=master)](https://travis-ci.org/web-aware/recon-scala)
 
 RECON brings attributes into the era of object notation, and provides a simple
 grammar and uniform tree model for attributed text markup.  RECON aims to
@@ -220,7 +220,7 @@ to your SBT build.
 ```
 resolvers += Resolver.sonatypeRepo("snapshots")
 
-libraryDependencies += "net.coeffect" %% "recon-scala" % "0.0.0-SNAPSHOT"
+libraryDependencies += "com.webaware" %% "recon-scala" % "0.0.0-SNAPSHOT"
 ```
 
 The library support compile-time RECON string interpolation.
