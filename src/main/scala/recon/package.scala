@@ -1,22 +1,49 @@
-import basis._
-import basis.collections._
-import basis.data._
 import basis.text._
+import scala.runtime._
 
 package object recon {
-  implicit def RecordBuilder: Builder[Item] with From[Record] with State[Record] = Record.Builder
-  implicit def TextBuilder: StringBuilder with From[Text] with State[Text] = Text.Builder
-  implicit def DataFramer: Framer with From[Data] with State[Data] = Data.Framer
+  lazy val True: Value = new Text(new UString("true"))
+  lazy val False: Value = new Text(new UString("false"))
 
-  implicit def StringToText: String => Text = Recon.StringToText
-  implicit def IntToNumber: Int => Number = Recon.IntToNumber
-  implicit def LongToNumber: Long => Number = Recon.LongToNumber
-  implicit def FloatToNumber: Float => Number = Recon.FloatToNumber
-  implicit def DoubleToNumber: Double => Number = Recon.DoubleToNumber
-  implicit def BooleanToValue: Boolean => Value = Recon.BooleanToValue
+  implicit lazy val StringToRecon: String => Text = new StringToRecon()
+  implicit lazy val IntToRecon: Int => Number = new IntToRecon()
+  implicit lazy val LongToRecon: Long => Number = new LongToRecon()
+  implicit lazy val FloatToRecon: Float => Number = new FloatToRecon()
+  implicit lazy val DoubleToRecon: Double => Number = new DoubleToRecon()
+  implicit lazy val BooleanToRecon: Boolean => Value = new BooleanToRecon()
 
-  implicit def ReconStringContext(stringContext: StringContext): ReconStringContext[Recon.type] =
-    macro ReconMacros.globalReconStringContext
+  implicit def ReconStringContext(stringContext: StringContext): ReconStringContext =
+    macro ReconMacros.ReconStringContext
+}
 
-  def ReconParser: Recon.ReconParser.type = Recon.ReconParser
+package recon {
+  private[recon] final class StringToRecon extends AbstractFunction1[String, Text] {
+    override def apply(value: String): Text = Text(value)
+    override def toString: String = "StringToRecon"
+  }
+
+  private[recon] final class IntToRecon extends AbstractFunction1[Int, Number] {
+    override def apply(value: Int): Number = Number(value)
+    override def toString: String = "IntToRecon"
+  }
+
+  private[recon] final class LongToRecon extends AbstractFunction1[Long, Number] {
+    override def apply(value: Long): Number = Number(value)
+    override def toString: String = "LongToRecon"
+  }
+
+  private[recon] final class FloatToRecon extends AbstractFunction1[Float, Number] {
+    override def apply(value: Float): Number = Number(value)
+    override def toString: String = "FloatToRecon"
+  }
+
+  private[recon] final class DoubleToRecon extends AbstractFunction1[Double, Number] {
+    override def apply(value: Double): Number = Number(value)
+    override def toString: String = "DoubleToRecon"
+  }
+
+  private[recon] final class BooleanToRecon extends AbstractFunction1[Boolean, Value] {
+    override def apply(value: Boolean): Value = if (value) True else False
+    override def toString: String = "BooleanToRecon"
+  }
 }

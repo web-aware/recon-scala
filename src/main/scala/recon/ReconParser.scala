@@ -2,6 +2,7 @@ package recon
 
 import basis._
 import basis.collections._
+import basis.data._
 import basis.text._
 
 private[recon] trait ReconParser extends ReconFactory { ReconParser =>
@@ -12,10 +13,10 @@ private[recon] trait ReconParser extends ReconFactory { ReconParser =>
   lazy val InlineValueParser: Iteratee[Int, Value] = new InlineValueParser()
   lazy val RecordParser: Iteratee[Int, Value]      = new RecordParser()
   lazy val MarkupParser: Iteratee[Int, Value]      = new MarkupParser()
-  lazy val StringParser: Iteratee[Int, Text]       = new StringParser()
-  lazy val DataParser: Iteratee[Int, Data]         = new DataParser()
-  lazy val NumberParser: Iteratee[Int, Number]     = new NumberParser()
   lazy val IdentParser: Iteratee[Int, Text]        = new IdentParser()
+  lazy val StringParser: Iteratee[Int, Text]       = new StringParser()
+  lazy val NumberParser: Iteratee[Int, Number]     = new NumberParser()
+  lazy val DataParser: Iteratee[Int, Data]         = new DataParser()
 
   def RecordParser(builder: ItemBuilder with State[Value]): Iteratee[Int, Value] = new RecordParser(builder)
   def MarkupParser(builder: ItemBuilder with State[Value]): Iteratee[Int, Value] = new MarkupParser(builder)
@@ -122,7 +123,12 @@ private[recon] trait ReconParser extends ReconFactory { ReconParser =>
       while (!input.isEmpty || input.isDone) {
         if (s == 1) {
           while (!input.isEmpty && { c = input.head; isWhitespace(c) }) input.step()
-          if (!input.isEmpty) s = 2
+          if (!input.isEmpty) {
+            if (c == '@' || c == '{' || c == '[' || isNameStartChar(c) ||
+                c == '"' || c == '-' || c >= '0' && c <= '9' || c == '%')
+              s = 2
+            else return error(input, expected = "block value", found = c)
+          }
           else if (input.isDone) return Iteratee.done(builder.state)
         }
         if (s == 2) {
@@ -186,9 +192,8 @@ private[recon] trait ReconParser extends ReconFactory { ReconParser =>
     override def interpolate(item: Value): Iteratee[Int, Value] = {
       var s = this.s
       if (s == 1) {
-        val builder = if (this.builder ne null) this.builder else ValueBuilder
-        val key = Iteratee.done(item)
-        s = 3
+        val key = BlockValueParser.asInstanceOf[Parser[Value]].interpolate(item)
+        s = 2
         new BlockParser(builder, key, value, s)
       }
       else if (s == 2) {
@@ -334,27 +339,27 @@ private[recon] trait ReconParser extends ReconFactory { ReconParser =>
               value = MarkupParser(builder)
               s = 5
             }
-            else if (c == '"') {
-              value = StringParser
+            else if (isNameStartChar(c)) {
+              value = IdentParser
               s = 4
             }
-            else if (c == '%') {
-              value = DataParser
+            else if (c == '"') {
+              value = StringParser
               s = 4
             }
             else if (c == '-' || c >= '0' && c <= '9') {
               value = NumberParser
               s = 4
             }
-            else if (isNameStartChar(c)) {
-              value = IdentParser
+            else if (c == '%') {
+              value = DataParser
               s = 4
             }
-            else if (builder eq null) return Iteratee.done(Absent)
+            else if (builder eq null) return Iteratee.done(Extant)
             else return Iteratee.done(builder.state)
           }
           else if (input.isDone) {
-            if (builder eq null) return Iteratee.done(Absent)
+            if (builder eq null) return Iteratee.done(Extant)
             else return Iteratee.done(builder.state)
           }
         }
@@ -393,24 +398,8 @@ private[recon] trait ReconParser extends ReconFactory { ReconParser =>
         }
         if (s == 6) {
           while (!input.isEmpty && isSpace(input.head)) input.step()
-          if (!input.isEmpty) {
-            if (input.head == '@') {
-              field = AttrParser
-              s = 7
-            }
-            else return Iteratee.done(builder.state)
-          }
-          else if (input.isDone) return Iteratee.done(builder.state)
-        }
-        if (s == 7) {
-          while ((!input.isEmpty || input.isDone) && field.isCont) field = field.feed(input)
-          if (field.isDone) {
-            if (builder eq null) builder = ValueBuilder
-            builder.appendField(field.bind)
-            field = null
-            s = 6
-          }
-          else if (field.isError) return field.asError
+          if (!input.isEmpty && input.head == '@') s = 1
+          else return Iteratee.done(builder.state)
         }
       }
       new BlockValueParser(builder, field, value, s)
@@ -421,7 +410,8 @@ private[recon] trait ReconParser extends ReconFactory { ReconParser =>
       if (s == 1 || s == 3) {
         val builder = if (this.builder ne null) this.builder else ValueBuilder
         builder.appendValue(item)
-        Iteratee.done(builder.state)
+        s = 3
+        new BlockValueParser(builder, field, value, s)
       }
       else if (s == 2) {
         var field = this.field.asInstanceOf[Parser[Field]].interpolate(item)
@@ -454,17 +444,6 @@ private[recon] trait ReconParser extends ReconFactory { ReconParser =>
         }
         new BlockValueParser(builder, field, value, s)
       }
-      else if (s == 7) {
-        var field = this.field.asInstanceOf[Parser[Field]].interpolate(item)
-        if (field.isError) return field.asError
-        if (field.isDone) {
-          val builder = this.builder
-          builder.appendField(field.bind)
-          field = null
-          s = 6
-        }
-        new BlockValueParser(builder, field, value, s)
-      }
       else super.interpolate(item)
     }
 
@@ -489,71 +468,79 @@ private[recon] trait ReconParser extends ReconFactory { ReconParser =>
       var value = this.value
       var field = this.field
       var builder = this.builder
-      while (!input.isEmpty || input.isDone) {
-        if (s == 1) {
-          if (!input.isEmpty) {
-            c = input.head
-            if (c == '@') {
-              field = AttrParser
-              s = 2
+      if (s == 1) {
+        if (!input.isEmpty) {
+          c = input.head
+          if (c == '@') {
+            field = AttrParser
+            s = 2
+          }
+          else if (c == '{') {
+            if (builder ne null) {
+              value = RecordParser(builder)
+              s = 5
             }
-            else if (c == '{') {
-              if (builder ne null) {
-                value = RecordParser(builder)
-                s = 5
-              }
-              else {
-                value = RecordParser
-                s = 4
-              }
+            else {
+              value = RecordParser
+              s = 4
             }
-            else if (c == '[') {
-              if (builder ne null) {
-                value = MarkupParser(builder)
-                s = 5
-              }
-              else {
-                value = MarkupParser
-                s = 4
-              }
+          }
+          else if (c == '[') {
+            if (builder ne null) {
+              value = MarkupParser(builder)
+              s = 5
             }
-            else if (builder eq null) return Iteratee.done(Absent)
-            else return Iteratee.done(builder.state)
+            else {
+              value = MarkupParser
+              s = 4
+            }
           }
-          else if (input.isDone) {
-            if (builder eq null) return Iteratee.done(Absent)
-            else return Iteratee.done(builder.state)
+          else if (builder eq null) return Iteratee.done(Extant)
+          else return Iteratee.done(builder.state)
+        }
+        else if (input.isDone) {
+          if (builder eq null) return Iteratee.done(Extant)
+          else return Iteratee.done(builder.state)
+        }
+      }
+      if (s == 2) {
+        while ((!input.isEmpty || input.isDone) && field.isCont) field = field.feed(input)
+        if (field.isDone) {
+          if (builder eq null) builder = ValueBuilder
+          builder.appendField(field.bind)
+          field = null
+          s = 3
+        }
+        else if (field.isError) return field.asError
+      }
+      if (s == 3) {
+        if (!input.isEmpty) {
+          c = input.head
+          if (c == '{') {
+            value = RecordParser(builder)
+            s = 5
           }
-        }
-        if (s == 2) {
-          while ((!input.isEmpty || input.isDone) && field.isCont) field = field.feed(input)
-          if (field.isDone) {
-            if (builder eq null) builder = ValueBuilder
-            builder.appendField(field.bind)
-            field = null
-            s = 3
+          else if (c == '[') {
+            value = MarkupParser(builder)
+            s = 5
           }
-          else if (field.isError) return field.asError
+          else return Iteratee.done(builder.state)
         }
-        if (s == 3) {
-          while (!input.isEmpty && isSpace(input.head)) input.step()
-          if (!input.isEmpty) s = 1
-          else if (input.isDone) return Iteratee.done(builder.state)
+        else if (input.isDone) return Iteratee.done(builder.state)
+      }
+      if (s == 4) {
+        while ((!input.isEmpty || input.isDone) && value.isCont) value = value.feed(input)
+        if (value.isDone) {
+          if (builder eq null) builder = ValueBuilder
+          builder.appendValue(value.bind)
+          return Iteratee.done(builder.state)
         }
-        if (s == 4) {
-          while ((!input.isEmpty || input.isDone) && value.isCont) value = value.feed(input)
-          if (value.isDone) {
-            if (builder eq null) builder = ValueBuilder
-            builder.appendValue(value.bind)
-            return Iteratee.done(builder.state)
-          }
-          else if (value.isError) return value.asError
-        }
-        if (s == 5) {
-          while ((!input.isEmpty || input.isDone) && value.isCont) value = value.feed(input)
-          if (value.isDone) return Iteratee.done(builder.state)
-          else if (value.isError) return value.asError
-        }
+        else if (value.isError) return value.asError
+      }
+      if (s == 5) {
+        while ((!input.isEmpty || input.isDone) && value.isCont) value = value.feed(input)
+        if (value.isDone) return Iteratee.done(builder.state)
+        else if (value.isError) return value.asError
       }
       new InlineValueParser(builder, field, value, s)
     }
@@ -563,7 +550,8 @@ private[recon] trait ReconParser extends ReconFactory { ReconParser =>
       if (s == 1 || s == 3) {
         val builder = if (this.builder ne null) this.builder else ValueBuilder
         builder.appendValue(item)
-        Iteratee.done(builder.state)
+        s = 3
+        new InlineValueParser(builder, field, value, s)
       }
       else if (s == 2) {
         var field = this.field.asInstanceOf[Parser[Field]].interpolate(item)
@@ -922,6 +910,41 @@ private[recon] trait ReconParser extends ReconFactory { ReconParser =>
   }
 
 
+  private final class IdentParser(
+      builder: StringBuilder with State[Text],
+      s: Int)
+    extends Parser[Text] {
+
+    def this() = this(null, 1)
+
+    override def feed(input: Iterator[Int]): Iteratee[Int, Text] = {
+      var c = 0
+      var s = this.s
+      var builder = this.builder
+      if (s == 1) {
+        if (!input.isEmpty && { c = input.head; isNameStartChar(c) }) {
+          if (builder eq null) builder = TextBuilder
+          input.step()
+          builder.append(c)
+          s = 2
+        }
+        else if (!input.isEmpty) return error(input, expected = "identitifer", found = c)
+        else if (input.isDone) return unexpectedEOF
+      }
+      if (s == 2) {
+        while (!input.isEmpty && { c = input.head; isNameChar(c) }) {
+          input.step()
+          builder.append(c)
+        }
+        if (!input.isEmpty || input.isDone) return Iteratee.done(builder.state)
+      }
+      new IdentParser(builder, s)
+    }
+
+    override def toString: String = (String.Builder~ReconParser.toString~'.'~"IdentParser").state
+  }
+
+
   private final class StringParser(
       text: StringBuilder with State[Text],
       s: Int)
@@ -1004,80 +1027,6 @@ private[recon] trait ReconParser extends ReconFactory { ReconParser =>
     override def state: Maybe[Text] = if (text ne null) Bind(text.state) else Trap
 
     override def toString: String = (String.Builder~ReconParser.toString~'.'~"StringParser").state
-  }
-
-
-  private final class DataParser(
-      data: StringBuilder with State[Data],
-      s: Int)
-    extends Parser[Data] {
-
-    def this() = this(null, 1)
-
-    override def feed(input: Iterator[Int]): Iteratee[Int, Data] = {
-      var c = 0
-      var s = this.s
-      val data = if (this.data ne null) this.data else DataBuilder
-      if (s == 1) {
-        if (!input.isEmpty && { c = input.head; c == '%' }) {
-          input.step()
-          s = 2
-        }
-        else if (!input.isEmpty) return error(input, expected = '%', found = c)
-        else if (input.isDone) return unexpectedEOF
-      }
-      while (!input.isEmpty || input.isDone) {
-        if (s == 2) {
-          if (!input.isEmpty && { c = input.head; isBase64Char(c) }) {
-            input.step()
-            data.append(c)
-            s = 3
-          }
-          else if (!input.isEmpty || input.isDone) return Iteratee.done(data.state)
-        }
-        if (s == 3) {
-          if (!input.isEmpty && { c = input.head; isBase64Char(c) }) {
-            input.step()
-            data.append(c)
-            s = 4
-          }
-          else if (!input.isEmpty) return error(input, expected = "base64 digit", found = c)
-          else if (input.isDone) return unexpectedEOF
-        }
-        if (s == 4) {
-          if (!input.isEmpty && { c = input.head; isBase64Char(c) || c == '=' }) {
-            input.step()
-            data.append(c)
-            if (c != '=') s = 5
-            else s = 6
-          }
-          else if (!input.isEmpty) return error(input, expected = "base64 digit", found = c)
-          else if (input.isDone) return unexpectedEOF
-        }
-        if (s == 5) {
-          if (!input.isEmpty && { c = input.head; isBase64Char(c) || c == '=' }) {
-            input.step()
-            data.append(c)
-            if (c != '=') s = 2
-            else return Iteratee.done(data.state)
-          }
-          else if (!input.isEmpty) return error(input, expected = "base64 digit", found = c)
-          else if (input.isDone) return unexpectedEOF
-        }
-        else if (s == 6) {
-          if (!input.isEmpty && { c = input.head; c == '=' }) {
-            input.step()
-            data.append(c)
-            return Iteratee.done(data.state)
-          }
-          else if (!input.isEmpty) return error(input, expected = '=', found = c)
-          else if (input.isDone) return unexpectedEOF
-        }
-      }
-      new DataParser(data, s)
-    }
-
-    override def toString: String = (String.Builder~ReconParser.toString~'.'~"DataParser").state
   }
 
 
@@ -1211,38 +1160,77 @@ private[recon] trait ReconParser extends ReconFactory { ReconParser =>
   }
 
 
-  private final class IdentParser(
-      builder: StringBuilder with State[Text],
+  private final class DataParser(
+      data: StringBuilder with State[Data],
       s: Int)
-    extends Parser[Text] {
+    extends Parser[Data] {
 
     def this() = this(null, 1)
 
-    override def feed(input: Iterator[Int]): Iteratee[Int, Text] = {
+    override def feed(input: Iterator[Int]): Iteratee[Int, Data] = {
       var c = 0
       var s = this.s
-      var builder = this.builder
+      val data = if (this.data ne null) this.data else DataBuilder
       if (s == 1) {
-        if (!input.isEmpty && { c = input.head; isNameStartChar(c) }) {
-          if (builder eq null) builder = TextBuilder
+        if (!input.isEmpty && { c = input.head; c == '%' }) {
           input.step()
-          builder.append(c)
           s = 2
         }
-        else if (!input.isEmpty) return error(input, expected = "identitifer", found = c)
+        else if (!input.isEmpty) return error(input, expected = '%', found = c)
         else if (input.isDone) return unexpectedEOF
       }
-      if (s == 2) {
-        while (!input.isEmpty && { c = input.head; isNameChar(c) }) {
-          input.step()
-          builder.append(c)
+      while (!input.isEmpty || input.isDone) {
+        if (s == 2) {
+          if (!input.isEmpty && { c = input.head; isBase64Char(c) }) {
+            input.step()
+            data.append(c)
+            s = 3
+          }
+          else if (!input.isEmpty || input.isDone) return Iteratee.done(data.state)
         }
-        if (!input.isEmpty || input.isDone) return Iteratee.done(builder.state)
+        if (s == 3) {
+          if (!input.isEmpty && { c = input.head; isBase64Char(c) }) {
+            input.step()
+            data.append(c)
+            s = 4
+          }
+          else if (!input.isEmpty) return error(input, expected = "base64 digit", found = c)
+          else if (input.isDone) return unexpectedEOF
+        }
+        if (s == 4) {
+          if (!input.isEmpty && { c = input.head; isBase64Char(c) || c == '=' }) {
+            input.step()
+            data.append(c)
+            if (c != '=') s = 5
+            else s = 6
+          }
+          else if (!input.isEmpty) return error(input, expected = "base64 digit", found = c)
+          else if (input.isDone) return unexpectedEOF
+        }
+        if (s == 5) {
+          if (!input.isEmpty && { c = input.head; isBase64Char(c) || c == '=' }) {
+            input.step()
+            data.append(c)
+            if (c != '=') s = 2
+            else return Iteratee.done(data.state)
+          }
+          else if (!input.isEmpty) return error(input, expected = "base64 digit", found = c)
+          else if (input.isDone) return unexpectedEOF
+        }
+        else if (s == 6) {
+          if (!input.isEmpty && { c = input.head; c == '=' }) {
+            input.step()
+            data.append(c)
+            return Iteratee.done(data.state)
+          }
+          else if (!input.isEmpty) return error(input, expected = '=', found = c)
+          else if (input.isDone) return unexpectedEOF
+        }
       }
-      new IdentParser(builder, s)
+      new DataParser(data, s)
     }
 
-    override def toString: String = (String.Builder~ReconParser.toString~'.'~"IdentParser").state
+    override def toString: String = (String.Builder~ReconParser.toString~'.'~"DataParser").state
   }
 
 
@@ -1265,5 +1253,81 @@ private[recon] trait ReconParser extends ReconFactory { ReconParser =>
       else if (found == 0) (String.Builder~"expected "~expected).state
       else (String.Builder~"expected "~expected~", but found "~'\''~found~'\'').state
     Iteratee.error(new ReconException(message, input))
+  }
+}
+
+object ReconParser extends ReconParser {
+  private[recon] override type Item = recon.Item
+  private[recon] override type Field = recon.Field
+  private[recon] override type Attr = recon.Attr
+  private[recon] override type Slot = recon.Slot
+  private[recon] override type Value = recon.Value
+  private[recon] override type Record = recon.Record
+  private[recon] override type Text = recon.Text
+  private[recon] override type Data = recon.Data
+  private[recon] override type Number = recon.Number
+  private[recon] override type Extant = recon.Extant.type
+  private[recon] override type Absent = recon.Absent.type
+
+  private[recon] override def Attr(key: Text, value: Value): Attr = recon.Attr(key, value)
+  private[recon] override def Attr(key: Text): Attr = recon.Attr(key)
+
+  private[recon] override def Slot(key: Value, value: Value): Slot = recon.Slot(key, value)
+  private[recon] override def Slot(key: Value): Slot = recon.Slot(key)
+
+  private[recon] override def ValueBuilder: ItemBuilder with State[Value] = new ValueBuilder()
+  private[recon] override def RecordBuilder: ItemBuilder with State[Record] = new RecordBuilder()
+  private[recon] override def TextBuilder: StringBuilder with State[Text] = recon.Text.Builder
+  private[recon] override def DataFramer: Framer with State[Data] = recon.Data.Framer
+
+  private[recon] override def Number(value: String): Number = recon.Number(value)
+
+  private[recon] override def True: Value = recon.True
+  private[recon] override def False: Value = recon.False
+
+  private[recon] override def Extant: Extant = recon.Extant
+  private[recon] override def Absent: Absent = recon.Absent
+
+  private final class ValueBuilder extends ItemBuilder with State[Value] {
+    private[this] var builder: Builder[Item] with basis.State[Record] = null
+    private[this] var value: Value = null.asInstanceOf[Value]
+
+    override def appendField(item: Field): Unit = {
+      if (builder ne null) builder.append(item)
+      else {
+        builder = recon.Record.Builder
+        if (value ne null) {
+          builder.append(value)
+          value = null.asInstanceOf[Value]
+        }
+        builder.append(item)
+      }
+    }
+
+    override def appendValue(item: Value): Unit = {
+      if (builder ne null) builder.append(item)
+      else if (value eq null) value = item
+      else {
+        builder = recon.Record.Builder
+        builder.append(value)
+        value = null.asInstanceOf[Value]
+        builder.append(item)
+      }
+    }
+
+    override def state: Value = {
+      if (value ne null) value
+      else if (builder ne null) builder.state
+      else Absent
+    }
+
+    override def toString: String = (String.Builder~ReconParser.toString~'.'~"ValueBuilder").state
+  }
+
+  private final class RecordBuilder extends ItemBuilder with State[Record] {
+    private[this] val self: Builder[Item] with basis.State[Record] = recon.Record.Builder
+    override def appendField(item: Field): Unit = self.append(item)
+    override def appendValue(item: Value): Unit = self.append(item)
+    override def state: Record = self.state
   }
 }

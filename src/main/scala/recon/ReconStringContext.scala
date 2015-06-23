@@ -3,45 +3,22 @@ package recon
 import basis.collections._
 import scala.reflect.macros._
 
-class ReconStringContext[-R <: Recon](recon: R, stringContext: StringContext) {
-  def recon(args: R#Value*): R#Value = macro ReconStringContextMacros.recon[R]
+class ReconStringContext(stringContext: StringContext) {
+  def recon(args: Value*): Value = macro ReconStringContextMacros.recon
 }
 
-private[recon] class ReconMacros(val c: blackbox.Context) {
-  import c.{ Expr, mirror, prefix, WeakTypeTag }
-  import c.universe._
-
-  def globalReconStringContext(stringContext: Expr[StringContext]): Expr[ReconStringContext[Recon.type]] = {
-    implicit val ReconStringContext =
-      WeakTypeTag[ReconStringContext[Recon.type]](
-        appliedType(
-          mirror.staticClass("recon.ReconStringContext").toTypeConstructor,
-          mirror.staticModule("recon.Recon").moduleClass.asClass.toType :: Nil))
-    Expr[ReconStringContext[Recon.type]](q"new $ReconStringContext(_root_.recon.Recon, $stringContext)")
-  }
-
-  def prefixReconStringContext[R <: Recon](stringContext: Expr[StringContext]): Expr[ReconStringContext[R]] = {
-    implicit val ReconStringContextR =
-      WeakTypeTag[ReconStringContext[R]](
-        appliedType(
-          mirror.staticClass("recon.ReconStringContext").toTypeConstructor,
-          (if (prefix.actualType != null) prefix.actualType else prefix.staticType) :: Nil))
-    Expr[ReconStringContext[R]](q"new $ReconStringContextR($prefix, $stringContext)")
-  }
-}
-
-private[recon] class ReconStringContextMacros(val c: blackbox.Context { type PrefixType <: ReconStringContext[_] }) {
+private[recon] class ReconStringContextMacros(val c: blackbox.Context { type PrefixType <: ReconStringContext }) {
   import c.{ abort, Expr, prefix }
   import c.universe._
 
-  def recon[R <: Recon : WeakTypeTag](args: Expr[R#Value]*): Expr[R#Value] = {
-    val Typed(Apply(_, recon :: stringContext :: Nil), _) = prefix.tree
+  def recon(args: Expr[Value]*): Expr[Value] = {
+    val Typed(Apply(_, stringContext :: Nil), _) = prefix.tree
     val Apply(_, stringLiterals) = stringContext
     val literals = stringLiterals.iterator
     val values = args.iterator
 
-    val factory = new ReconExprFactory[c.type, R](c)(Expr[R](recon))
-    var parser = factory.DocumentParser: Iteratee[Int, Expr[R#Value]]
+    val factory = new ReconExprFactory[c.type](c)
+    var parser = factory.DocumentParser: Iteratee[Int, Expr[Value]]
 
     var input = null: LiteralIterator[c.type]
     while (literals.hasNext && parser.isCont) {
@@ -49,7 +26,7 @@ private[recon] class ReconStringContextMacros(val c: blackbox.Context { type Pre
       while (!input.isEmpty && parser.isCont)
         parser = parser.feed(input)
       if (values.hasNext && parser.isCont)
-        parser = parser.asInstanceOf[factory.Parser[Expr[R#Value]]].interpolate(values.next())
+        parser = parser.asInstanceOf[factory.Parser[Expr[Value]]].interpolate(values.next())
     }
     if (!literals.hasNext && parser.isCont)
       parser = parser.feed(Iterator.done)
@@ -61,7 +38,7 @@ private[recon] class ReconStringContextMacros(val c: blackbox.Context { type Pre
   }
 }
 
-private final class LiteralIterator[C <: blackbox.Context](
+private[recon] final class LiteralIterator[C <: blackbox.Context](
     val c: C,
     _literal: C#Tree,
     private[this] var index: Int)

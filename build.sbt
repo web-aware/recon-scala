@@ -1,5 +1,5 @@
 name         := "recon-scala"
-version      := "0.1.0-SNAPSHOT"
+version      := "0.2.0-SNAPSHOT"
 organization := "com.webaware"
 
 description  := "Record Notation (RECON) Scala Implementation"
@@ -31,8 +31,9 @@ resolvers += Resolver.sonatypeRepo("snapshots")
 libraryDependencies ++= Seq(
   "it.reify" %% "basis-core" % "0.2.0-SNAPSHOT",
   "it.reify" %% "basis-data" % "0.2.0-SNAPSHOT",
+  "it.reify" %% "basis-net" % "0.2.0-SNAPSHOT",
   "org.scala-lang" % "scala-reflect" % scalaVersion.value % "provided",
-  "org.scalatest" %% "scalatest" % "2.2.1" % "test")
+  "org.scalatest" %% "scalatest" % "2.2.4" % "test")
 
 scalacOptions in (Compile, doc) ++= {
   val tagOrBranch = if (version.value.endsWith("-SNAPSHOT")) "master" else "v" + version.value
