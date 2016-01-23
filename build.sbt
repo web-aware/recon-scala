@@ -6,8 +6,9 @@ description  := "Record Notation (RECON) Scala Implementation"
 homepage     := Some(url("https://github.com/web-aware/recon-scala"))
 licenses     := Seq("Apache 2" -> url("http://www.apache.org/licenses/LICENSE-2.0.txt"))
 
-scalaVersion := "2.11.6"
+scalaVersion := "2.11.7"
 scalacOptions ++= Seq(
+  "-target:jvm-1.7",
   "-language:_",
   "-Yno-predef",
   "-optimise",
@@ -33,7 +34,7 @@ libraryDependencies ++= Seq(
   "it.reify" %% "basis-data" % "0.2.0-SNAPSHOT",
   "it.reify" %% "basis-net" % "0.2.0-SNAPSHOT",
   "org.scala-lang" % "scala-reflect" % scalaVersion.value % "provided",
-  "org.scalatest" %% "scalatest" % "2.2.4" % "test")
+  "org.scalatest" %% "scalatest" % "2.2.6" % "test")
 
 scalacOptions in (Compile, doc) ++= {
   val tagOrBranch = if (version.value.endsWith("-SNAPSHOT")) "master" else "v" + version.value

@@ -7,7 +7,7 @@ import basis.data._
 import basis.text._
 import basis.util._
 
-sealed abstract class Item {
+sealed abstract class Item extends Comparable[Item] {
   def isDefined: Boolean = true
 
   def isField: Boolean = false
@@ -85,6 +85,10 @@ sealed abstract class Item {
   }
 }
 
+object Item extends java.util.Comparator[Item] {
+  override def compare(x: Item, y: Item): Int = x.compareTo(y)
+}
+
 
 sealed abstract class Field extends Item {
   override def isField: Boolean = true
@@ -132,6 +136,17 @@ final class Attr(override val key: Text, override val value: Value) extends Fiel
     }
   }
 
+  override def compareTo(other: Item): Int = {
+    if (other.isInstanceOf[Attr]) compareTo(other.asInstanceOf[Attr])
+    else -1
+  }
+
+  private[this] def compareTo(that: Attr): Int = {
+    val keyOrder = key.compareTo(that.key)
+    if (keyOrder != 0) keyOrder
+    else value.compareTo(that.value)
+  }
+
   override def equals(other: Any): Boolean =
     eq(other.asInstanceOf[AnyRef]) || other.isInstanceOf[Attr] && {
       val that = other.asInstanceOf[Attr]
@@ -175,6 +190,18 @@ final class Slot(override val key: Value, override val value: Value) extends Fie
     key.writeRecon(builder)
     builder.append(':')
     if (!value.isExtant) value.writeRecon(builder)
+  }
+
+  override def compareTo(other: Item): Int = {
+    if (other.isInstanceOf[Slot]) compareTo(other.asInstanceOf[Slot])
+    else if (other.isInstanceOf[Attr]) 1
+    else -1
+  }
+
+  private[this] def compareTo(that: Slot): Int = {
+    val keyOrder = key.compareTo(that.key)
+    if (keyOrder != 0) keyOrder
+    else value.compareTo(that.value)
   }
 
   override def equals(other: Any): Boolean =
@@ -594,6 +621,28 @@ final class Record private[recon] (
 
   def valuesIterator: Iterator[Value] = new RecordValuesIterator(iterator)
 
+  override def compareTo(other: Item): Int = {
+    if (other.isInstanceOf[Record]) compareTo(other.asInstanceOf[Record])
+    else if (other.isInstanceOf[Field]) 1
+    else -1
+  }
+
+  private[this] def compareTo(that: Record): Int = {
+    val p = length
+    val q = that.length
+    val n = p min q
+    var i = 0
+    var itemOrder = 0
+    while (i < n && itemOrder == 0) {
+      itemOrder = this(i).compareTo(that(i))
+      i += 1
+    }
+    if (itemOrder != 0) itemOrder
+    else if (p > q) 1
+    else if (p < q) -1
+    else 0
+  }
+
   protected override def stringPrefix: String = "Record"
 }
 
@@ -712,6 +761,14 @@ final class Text private[recon] (protected val self: UString)
 
   override def asString: String = self.toString
 
+  override def compareTo(other: Item): Int = {
+    if (other.isInstanceOf[Text]) asString.compareTo(other.asInstanceOf[Text].asString)
+    else if (other.isInstanceOf[Field] ||
+             other.isInstanceOf[Record] ||
+             other.isInstanceOf[Data]) 1
+    else -1
+  }
+
   protected override def stringPrefix: String = "Text"
 }
 
@@ -770,6 +827,29 @@ final class Data private[recon] (protected val self: Loader)
   override def writeRecon(builder: StringBuilder): Unit = {
     builder.append('%')
     this.writeBase64(builder)
+  }
+
+  override def compareTo(other: Item): Int = {
+    if (other.isInstanceOf[Data]) compareTo(other.asInstanceOf[Data])
+    else if (other.isInstanceOf[Field] || other.isInstanceOf[Record]) 1
+    else -1
+  }
+
+  private[this] def compareTo(that: Data): Int = {
+    val p = size
+    val q = that.size
+    val n = p min q
+    var i = 0L
+    var byteOrder = 0
+    while (i < n && byteOrder == 0) {
+      byteOrder = loadByte(i) - that.loadByte(i)
+      i += 1L
+    }
+    if (byteOrder > 0) 1
+    else if (byteOrder < 0) -1
+    else if (p > q) 1
+    else if (p < q) -1
+    else 0
   }
 
   protected override def stringPrefix: String = "Data"
@@ -834,6 +914,16 @@ sealed abstract class Number extends Value {
   override def writeRecon(builder: StringBuilder): Unit = builder.append(toDecimalString)
 
   override def toRecon: String = toDecimalString
+
+  override def compareTo(other: Item): Int = {
+    if (other.isInstanceOf[Number])
+      java.lang.Double.compare(toDouble, other.asInstanceOf[Number].toDouble)
+    else if (other.isInstanceOf[Field] ||
+             other.isInstanceOf[Record] ||
+             other.isInstanceOf[Data] ||
+             other.isInstanceOf[Text]) 1
+    else -1
+  }
 
   override def equals(other: Any): Boolean = eq(other.asInstanceOf[AnyRef]) || (other match {
     case that: Number =>
@@ -968,6 +1058,16 @@ object Extant extends Value {
 
   override def toRecon: String = ""
 
+  override def compareTo(other: Item): Int = {
+    if (eq(other)) 0
+    else if (other.isInstanceOf[Field] ||
+             other.isInstanceOf[Record] ||
+             other.isInstanceOf[Data] ||
+             other.isInstanceOf[Text] ||
+             other.isInstanceOf[Number]) 1
+    else -1
+  }
+
   override def toString: String = "Extant"
 }
 
@@ -981,6 +1081,11 @@ object Absent extends Value {
   override def writeRecon(builder: StringBuilder): Unit = ()
 
   override def toRecon: String = ""
+
+  override def compareTo(other: Item): Int = {
+    if (eq(other)) 0
+    else 1
+  }
 
   override def toString: String = "Absent"
 }

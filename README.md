@@ -351,11 +351,17 @@ case class Slot(key: Value, value: Value) extends Field // |   |   |-- Slot
 sealed abstract class Value extends Item                // |   |-- Value
 case class Record(items: Item*) extends Value           // |   |   |-- Record
 case class Text(toString: String) extends Value         // |   |   |-- Text
-case class Number(toDouble: Double) extends Value       // |   |   |-- Number
 case class Data(toArray: Array[Byte]) extends Value     // |   |   |-- Data
+case class Number(toDouble: Double) extends Value       // |   |   |-- Number
 case object Extant extends Value                        // |   |   |-- Extant
 case object Absent extends Value                        // |   |   |-- Absent
 ```
+
+### Ordering
+
+RECON defines a total ordering over all items.  Items of different types sort
+in the following relative order: attributes, slots, records, data, text,
+numbers, extant, then absent.
 
 ## Language Grammar
 
